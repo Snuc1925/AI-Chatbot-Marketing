@@ -117,24 +117,32 @@ class ChatService:
                 self.monitor_service.finish_trace(request_id, final_response=resp.model_dump(), total_latency_ms=round((time.perf_counter()-t_start)*1000, 2))
             return resp
 
-        # 2. Retrieve relevant business rules from Business Knowledge RAG
+        # 2. Retrieve relevant business rules from Business Knowledge
         relevant_knowledge: list[str] = []
         if self.knowledge_service:
             try:
                 knowledge_matches = self.knowledge_service.retrieve_relevant_knowledge_matches(user_query, top_k=3)
                 relevant_knowledge = [m.document for m in knowledge_matches]
-                logger.info("  [Step 2: Knowledge RAG] Retrieved %d relevant chunks", len(knowledge_matches))
-                for idx, match in enumerate(knowledge_matches, 1):
-                    logger.info("    -> Chunk %d (score=%.4f): %s", idx, match.score, match.document[:120].replace('\n', ' '))
+                is_k_rag = getattr(self.knowledge_service, "enable_knowledge_rag", True)
+                if is_k_rag:
+                    logger.info("  [Step 2: Knowledge RAG] Retrieved %d relevant chunks (RAG Mode)", len(knowledge_matches))
+                    for idx, match in enumerate(knowledge_matches, 1):
+                        logger.info("    -> Chunk %d (score=%.4f): %s", idx, match.score, match.document[:120].replace('\n', ' '))
+                else:
+                    logger.info("  [Step 2: Full Knowledge] Injected all %d business knowledge rules into prompt (Direct Mode)", len(relevant_knowledge))
+                    for idx, match in enumerate(knowledge_matches, 1):
+                        logger.info("    -> Rule %d: %s", idx, match.document[:120].replace('\n', ' '))
             except Exception as e:
-                logger.warning("  [Step 2: Knowledge RAG] Knowledge retrieval failed: %s", e)
+                logger.warning("  [Step 2: Knowledge] Knowledge retrieval failed: %s", e)
 
         # 3. Retrieve schema context
         schema_context: str = ""
         if self.schema_manager:
             try:
                 schema_context = self.schema_manager.get_schema_context(user_query)
-                logger.info("  [Step 3: Schema Context] Schema retrieved (%d chars)", len(schema_context))
+                is_s_rag = getattr(self.schema_manager, "enable_schema_rag", False)
+                mode_str = "Schema RAG Mode" if is_s_rag else "Direct Full Schema Mode"
+                logger.info("  [Step 3: Schema Context] Schema retrieved (%d chars, %s)", len(schema_context), mode_str)
             except Exception as e:
                 logger.warning("  [Step 3: Schema Context] Schema retrieval failed: %s", e)
 

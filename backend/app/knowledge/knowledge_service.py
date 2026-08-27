@@ -16,10 +16,12 @@ class KnowledgeService:
         vector_store: BaseVectorStore,
         embedding_provider: BaseEmbeddingProvider,
         knowledge_file_path: str = "business_knowledge.json",
+        enable_knowledge_rag: bool = True,
     ) -> None:
         self.vector_store = vector_store
         self.embedding_provider = embedding_provider
         self.knowledge_file_path = knowledge_file_path
+        self.enable_knowledge_rag = enable_knowledge_rag
 
     def sync_knowledge(self, force_reset: bool = False) -> dict[str, Any]:
         """
@@ -77,8 +79,22 @@ class KnowledgeService:
 
     def retrieve_relevant_knowledge_matches(self, query: str, top_k: int = 3, threshold: float = 0.35) -> list[VectorMatch]:
         """
-        Embeds user query and retrieves the top-k most relevant natural language business rule matches with similarity scores.
+        Retrieves natural language business rule matches:
+        - If enable_knowledge_rag is False: Returns ALL business rule chunks directly (Full Knowledge Mode).
+        - If enable_knowledge_rag is True: Performs Qdrant vector semantic search (Knowledge RAG Mode).
         """
+        if not self.enable_knowledge_rag:
+            all_chunks = self.get_all_knowledge()
+            return [
+                VectorMatch(
+                    id=f"full_chunk_{idx}",
+                    document=chunk,
+                    metadata={"mode": "full_knowledge", "chunk_index": idx},
+                    score=1.0,
+                )
+                for idx, chunk in enumerate(all_chunks, 1)
+            ]
+
         if not query or not query.strip():
             return []
 
@@ -93,7 +109,7 @@ class KnowledgeService:
                     relevant_matches = [matches[0]]
             return relevant_matches
         except Exception as e:
-            logger.error("Knowledge retrieval failed: %s", e)
+            logger.error("Knowledge RAG retrieval failed: %s", e)
             return []
 
     def retrieve_relevant_knowledge(self, query: str, top_k: int = 3, threshold: float = 0.35) -> list[str]:

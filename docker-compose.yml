@@ -59,6 +59,8 @@ services:
       - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL}
       - COLLECTION_NAME=${COLLECTION_NAME-ai_mkt_data}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - ENABLE_KNOWLEDGE_RAG=${ENABLE_KNOWLEDGE_RAG-true}
+      - ENABLE_SCHEMA_RAG=${ENABLE_SCHEMA_RAG-false}
     depends_on:
       - qdrant
       - redis

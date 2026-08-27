@@ -88,6 +88,7 @@ class ApplicationServices:
             vector_store=knowledge_vector_store,
             embedding_provider=embedding_provider,
             knowledge_file_path=settings.knowledge_file_path,
+            enable_knowledge_rag=settings.enable_knowledge_rag,
         )
 
         knowledge_manage_service = KnowledgeManageService(

@@ -10,7 +10,7 @@ from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
-from app.services.chat_service import ChatRequest, ChatResponse, CitationItem
+from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
 from app.services.monitor_service import MonitorService
 from app.sessions.models import SessionStatus
 from app.sessions.store import BaseSessionStore
@@ -236,6 +236,7 @@ class StreamChatService:
             return
 
         if analysis.trace:
+            log_llm_interaction(logger, "Step 4: LLM Analysis", analysis.trace)
             total_prompt_tokens += analysis.trace.prompt_tokens
             total_completion_tokens += analysis.trace.completion_tokens
             total_tokens += analysis.trace.total_tokens
@@ -244,8 +245,17 @@ class StreamChatService:
                 self.monitor_service.record_llm_trace(request_id, analysis.trace.model_dump())
 
         analysis_latency_ms = round((time.perf_counter() - t_step) * 1000, 2)
-        logger.info("  [Step 4: LLM Analysis] Done in %sms | Clarify Needed: %s | Extracted: %s | Missing: %s | SQLs: %d",
-                    analysis_latency_ms, analysis.is_clarification_needed, analysis.extracted_entities, analysis.missing_slots, len(analysis.generated_sqls))
+        logger.info(
+            "  [Step 4: LLM Analysis] Done in %sms | Tokens: (prompt=%d, completion=%d, total=%d) | Clarify Needed: %s | Extracted: %s | Missing: %s | SQLs: %d",
+            analysis_latency_ms,
+            analysis.trace.prompt_tokens if analysis.trace else 0,
+            analysis.trace.completion_tokens if analysis.trace else 0,
+            analysis.trace.total_tokens if analysis.trace else 0,
+            analysis.is_clarification_needed,
+            analysis.extracted_entities,
+            analysis.missing_slots,
+            len(analysis.generated_sqls),
+        )
         for sql_item in analysis.generated_sqls:
             logger.info("    -> SQL [%s] (%s): %s", sql_item.id, sql_item.title, sql_item.sql)
 
@@ -401,13 +411,21 @@ class StreamChatService:
                 sql_query_results=sql_query_results,
                 business_knowledge=relevant_knowledge,
             )
+            if synth_trace:
+                log_llm_interaction(logger, "Step 6: LLM Synthesis", synth_trace)
             total_prompt_tokens += synth_trace.prompt_tokens
             total_completion_tokens += synth_trace.completion_tokens
             total_tokens += synth_trace.total_tokens
             llm_traces.append(synth_trace.model_dump())
             if self.monitor_service:
                 self.monitor_service.record_llm_trace(request_id, synth_trace.model_dump())
-            logger.info("  [Step 6: LLM Synthesis] Done (tokens=%d)", synth_trace.total_tokens)
+            logger.info(
+                "  [Step 6: LLM Synthesis] Done in %sms | Tokens: (prompt=%d, completion=%d, total=%d)",
+                synth_trace.latency_ms,
+                synth_trace.prompt_tokens,
+                synth_trace.completion_tokens,
+                synth_trace.total_tokens,
+            )
         else:
             bot_msg = analysis.suggested_answer or "Đã ghi nhận yêu cầu của bạn."
 

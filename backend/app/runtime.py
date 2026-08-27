@@ -5,11 +5,13 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.database.clickhouse_client import ClickHouseClient
+from app.database.schema_manage_service import SchemaManageService
 from app.database.schema_manager import SchemaManager
 from app.embeddings.openai_provider import OpenAIEmbeddingProvider
 from app.knowledge.knowledge_manage_service import KnowledgeManageService
 from app.knowledge.knowledge_service import KnowledgeService
 from app.llm.llm_client import LLMClient
+from app.llm.tools.schema_tool import SchemaAgentTool
 from app.services.chat_service import ChatService
 from app.services.monitor_service import MonitorService
 from app.services.stream_service import StreamChatService
@@ -28,6 +30,8 @@ class ApplicationServices:
     knowledge_service: KnowledgeService
     knowledge_manage_service: KnowledgeManageService
     schema_manager: SchemaManager
+    schema_manage_service: SchemaManageService
+    schema_tool: SchemaAgentTool
     clickhouse_client: ClickHouseClient
     chat_service: ChatService
     stream_chat_service: StreamChatService
@@ -80,7 +84,17 @@ class ApplicationServices:
         )
 
         schema_manager = SchemaManager(
+            schema_file_path=settings.schema_file_path,
             enable_schema_rag=settings.enable_schema_rag,
+        )
+
+        schema_manage_service = SchemaManageService(
+            schema_manager=schema_manager,
+            schema_file_path=settings.schema_file_path,
+        )
+
+        schema_tool = SchemaAgentTool(
+            schema_manager=schema_manager,
         )
 
         # 6. Knowledge Service & Knowledge Manage Service
@@ -118,6 +132,10 @@ class ApplicationServices:
             monitor_service=monitor_service,
         )
 
+        # Connect Monitor to chat services
+        chat_service.monitor_service = monitor_service
+        stream_chat_service.monitor_service = monitor_service
+
         return cls(
             knowledge_vector_store=knowledge_vector_store,
             embedding_provider=embedding_provider,
@@ -126,11 +144,10 @@ class ApplicationServices:
             knowledge_service=knowledge_service,
             knowledge_manage_service=knowledge_manage_service,
             schema_manager=schema_manager,
+            schema_manage_service=schema_manage_service,
+            schema_tool=schema_tool,
             clickhouse_client=clickhouse_client,
             chat_service=chat_service,
             stream_chat_service=stream_chat_service,
             monitor_service=monitor_service,
         )
-
-
-

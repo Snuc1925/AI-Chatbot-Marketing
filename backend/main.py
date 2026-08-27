@@ -36,8 +36,8 @@ chat_file_handler = RotatingFileHandler(
 chat_file_handler.setLevel(logging.INFO)
 chat_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 
-# Attach exclusively to chat service and endpoints to capture all Step 1 -> 6 pipeline logs
-for logger_name in ["app.services.chat_service", "app.api.endpoints"]:
+# Attach exclusively to chat services, stream service, llm client, and endpoints to capture all Step 1 -> 6 pipeline logs
+for logger_name in ["app.services.chat_service", "app.services.stream_service", "app.api.endpoints", "app.llm.llm_client"]:
     target_logger = logging.getLogger(logger_name)
     # Remove existing file handlers if any to avoid duplicate entries during hot reload
     target_logger.handlers = [h for h in target_logger.handlers if not isinstance(h, RotatingFileHandler)]

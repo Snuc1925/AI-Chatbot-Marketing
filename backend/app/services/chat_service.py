@@ -9,13 +9,39 @@ from pydantic import BaseModel, Field
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
-from app.llm.llm_client import LLMClient, SqlQueryItem
+from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.monitor_service import MonitorService
 from app.sessions.models import SessionState, SessionStatus
 from app.sessions.store import BaseSessionStore
 
 logger = logging.getLogger(__name__)
 
+
+def log_llm_interaction(logger_inst: logging.Logger, step_name: str, trace: LLMTrace | None) -> None:
+    """Helper to log detailed LLM prompt input, raw response output, and token metrics."""
+    if not trace:
+        return
+    logger_inst.info("  [%s] === LLM REQUEST (INPUT) ===", step_name)
+    for msg in trace.input_messages:
+        role = msg.get("role", "unknown").upper()
+        content = msg.get("content", "")
+        indented = "\n".join(f"      {line}" for line in content.strip().splitlines())
+        logger_inst.info("    -> [%s MESSAGE]:\n%s", role, indented)
+
+    logger_inst.info("  [%s] === LLM RESPONSE (OUTPUT) ===", step_name)
+    raw_lines = trace.raw_output.strip().splitlines()
+    indented_out = "\n".join(f"      {line}" for line in raw_lines)
+    logger_inst.info("    -> Raw Output:\n%s", indented_out)
+
+    logger_inst.info(
+        "  [%s] === LLM METRICS ===: latency=%sms | prompt_tokens=%d | completion_tokens=%d | total_tokens=%d | model=%s",
+        step_name,
+        trace.latency_ms,
+        trace.prompt_tokens,
+        trace.completion_tokens,
+        trace.total_tokens,
+        trace.model,
+    )
 
 
 class CitationItem(BaseModel):
@@ -159,8 +185,19 @@ class ChatService:
                 is_follow_up=is_follow_up,
             )
             llm_time_ms = round((time.perf_counter() - t_llm) * 1000, 2)
-            logger.info("  [Step 4: LLM Analysis] Done in %sms | Clarify Needed: %s | Extracted: %s | Missing: %s | SQLs: %d",
-                        llm_time_ms, analysis.is_clarification_needed, analysis.extracted_entities, analysis.missing_slots, len(analysis.generated_sqls))
+            if analysis.trace:
+                log_llm_interaction(logger, "Step 4: LLM Analysis", analysis.trace)
+            logger.info(
+                "  [Step 4: LLM Analysis] Done in %sms | Tokens: (prompt=%d, completion=%d, total=%d) | Clarify Needed: %s | Extracted: %s | Missing: %s | SQLs: %d",
+                llm_time_ms,
+                analysis.trace.prompt_tokens if analysis.trace else 0,
+                analysis.trace.completion_tokens if analysis.trace else 0,
+                analysis.trace.total_tokens if analysis.trace else 0,
+                analysis.is_clarification_needed,
+                analysis.extracted_entities,
+                analysis.missing_slots,
+                len(analysis.generated_sqls),
+            )
             for sql_item in analysis.generated_sqls:
                 logger.info("    -> SQL [%s] (%s): %s", sql_item.id, sql_item.title, sql_item.sql)
         except Exception as e:
@@ -328,8 +365,16 @@ class ChatService:
                 sql_query_results=sql_query_results,
                 business_knowledge=relevant_knowledge,
             )
+            if synth_trace:
+                log_llm_interaction(logger, "Step 6: LLM Synthesis", synth_trace)
             synth_time_ms = round((time.perf_counter() - t_synth) * 1000, 2)
-            logger.info("  [Step 6: LLM Synthesis] Done in %sms (tokens=%d)", synth_time_ms, synth_trace.total_tokens)
+            logger.info(
+                "  [Step 6: LLM Synthesis] Done in %sms | Tokens: (prompt=%d, completion=%d, total=%d)",
+                synth_time_ms,
+                synth_trace.prompt_tokens,
+                synth_trace.completion_tokens,
+                synth_trace.total_tokens,
+            )
             if self.monitor_service and request_id:
                 self.monitor_service.record_llm_trace(request_id, synth_trace.model_dump())
         except Exception as e:

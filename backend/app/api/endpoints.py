@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 from fastapi import APIRouter, HTTPException, Request
@@ -205,6 +206,68 @@ async def get_monitor_trace_detail(request_id: str, request: Request) -> dict[st
     return detail
 
 
+# --- Schema & Metadata Management Endpoints ---
+
+@router.get("/schema/tables")
+async def list_schema_tables(request: Request) -> list[dict[str, Any]]:
+    """Lists all managed ClickHouse tables and their metadata."""
+    services = request.app.state.services
+    return services.schema_manage_service.list_tables()
+
+
+@router.get("/schema/tables/{table_name}")
+async def get_schema_table(table_name: str, request: Request) -> dict[str, Any]:
+    """Gets detailed schema metadata for a specific table."""
+    services = request.app.state.services
+    table_meta = services.schema_manage_service.get_table(table_name)
+    if not table_meta:
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found in metadata.")
+    return table_meta
+
+
+@router.post("/schema/tables")
+async def upsert_schema_table(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Creates or updates a table's schema metadata and persists to schemas.json."""
+    services = request.app.state.services
+    if not payload.get("table_name"):
+        raise HTTPException(status_code=400, detail="Field 'table_name' is required.")
+    return services.schema_manage_service.upsert_table(payload)
+
+
+@router.delete("/schema/tables/{table_name}")
+async def delete_schema_table(table_name: str, request: Request) -> dict[str, Any]:
+    """Deletes a table from schema metadata and updates schemas.json."""
+    services = request.app.state.services
+    res = services.schema_manage_service.delete_table(table_name)
+    if res.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail=res.get("message"))
+    return res
+
+
+@router.post("/schema/reload")
+async def reload_schema_metadata(request: Request) -> dict[str, Any]:
+    """Reloads schema metadata from schemas.json file directly."""
+    services = request.app.state.services
+    return services.schema_manage_service.reload()
+
+
+@router.get("/schema/tools/definitions")
+async def get_schema_tool_definitions(request: Request) -> list[dict[str, Any]]:
+    """Returns tool schemas for LLM Function Calling (Agentic schema on-demand discovery)."""
+    services = request.app.state.services
+    return services.schema_tool.tool_definitions
+
+
+@router.post("/schema/tools/call")
+async def call_schema_tool(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Tests executing a Schema Tool Call directly."""
+    services = request.app.state.services
+    tool_name = payload.get("tool_name", "")
+    args = payload.get("arguments", {})
+    raw_res = services.schema_tool.execute_tool(tool_name, args)
+    return {"status": "success", "result": json.loads(raw_res)}
+
+
 @router.get("/monitor/live")
 async def monitor_live_stream(request: Request):
     """
@@ -221,6 +284,3 @@ async def monitor_live_stream(request: Request):
             "X-Accel-Buffering": "no",
         },
     )
-
-
-

@@ -1,0 +1,242 @@
+[
+  {
+    "table_name": "f023_mpre_vas_manh",
+    "description": "Bảng log mua và đăng ký gói cước VAS của thuê bao.",
+    "columns": [
+      {
+        "name": "isdn",
+        "type": "String",
+        "description": "Số điện thoại thuê bao mua gói (bỏ số 0 đầu, ví dụ 8498xxxxxxx hoặc 98xxxxxxx)"
+      },
+      {
+        "name": "vas_type",
+        "type": "Nullable(String)",
+        "description": "Loại VAS (VIETTEL, DK_OTHER, VTFREE, 2G3G,...)"
+      },
+      {
+        "name": "vas_service",
+        "type": "Nullable(String)",
+        "description": "Dịch vụ VAS (HUY T15K, DK_OTHER, SMARTMOTO,...)"
+      },
+      {
+        "name": "sub_service",
+        "type": "Nullable(String)",
+        "description": "Tên gói cước chi tiết (HGG100, CT50, DT50, 5G150, SD30S, 5G50, MT7Z,... tương ứng vas_name trong bảng campaign_customer_detail)"
+      },
+      {
+        "name": "action_no",
+        "type": "Nullable(String)",
+        "description": "Hành động: DK (Đăng ký), KT (Kiểm tra), HUY (Hủy gói)"
+      },
+      {
+        "name": "command",
+        "type": "Nullable(String)",
+        "description": "Cú pháp tin nhắn đăng ký (KTS5, FT5, VT100,...)"
+      },
+      {
+        "name": "sta_datetime",
+        "type": "Nullable(DateTime)",
+        "description": "Thời điểm mua hoặc đăng ký gói cước thành công"
+      },
+      {
+        "name": "org_charge",
+        "type": "Nullable(Float64)",
+        "description": "Giá gốc của gói cước"
+      },
+      {
+        "name": "prom_charge",
+        "type": "Nullable(Float64)",
+        "description": "Giá cước sau khuyến mại"
+      },
+      {
+        "name": "tot_charge",
+        "type": "Nullable(Float64)",
+        "description": "Tổng cước phí thực tế ghi nhận doanh thu"
+      },
+      {
+        "name": "description",
+        "type": "Nullable(String)",
+        "description": "Mô tả giao dịch (S5, VT100, Trừ phí gia hạn gói 5G10,...)"
+      },
+      {
+        "name": "partition",
+        "type": "UInt32",
+        "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801, bắt buộc lọc trong WHERE để tối ưu)"
+      }
+    ],
+    "join_hints": [
+      "Join với f_adpm_aimkt_campaign_customer_detail qua isdn = msisdn và sub_service = vas_name để xác định thuê bao có mua đúng gói khuyến nghị trong chiến dịch hay không."
+    ],
+    "ddl": "CREATE TABLE f023_mpre_vas_manh (\n    topic_kafka Nullable(String),\n    filename Nullable(String),\n    prd_id Nullable(UInt32),\n    hour_id Nullable(String),\n    import_date Nullable(Date),\n    headnum_no Nullable(String),\n    isdn String,\n    vas_type Nullable(String),\n    vas_service Nullable(String),\n    sub_service Nullable(String),\n    action_no Nullable(String),\n    action_no2 Nullable(String),\n    vas_status Nullable(String),\n    command Nullable(String),\n    command2 Nullable(String),\n    charge_type Nullable(String),\n    sta_datetime Nullable(DateTime),\n    org_charge Nullable(Float64),\n    prom_charge Nullable(Float64),\n    tot_charge Nullable(Float64),\n    party_code Nullable(String),\n    description Nullable(String),\n    source_name Nullable(String),\n    direction_id Nullable(Float64),\n    insert_date Nullable(DateTime),\n    mm_charge Nullable(Float64),\n    mon Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, isdn);"
+  },
+  {
+    "table_name": "webservice_log_v2_manh",
+    "description": "Bảng ghi log truyền thông các kênh webservice (MyViettel, Callbot).",
+    "columns": [
+      {
+        "name": "isdn",
+        "type": "String",
+        "description": "Số điện thoại thuê bao nhận truyền thông qua MyViettel/Callbot"
+      },
+      {
+        "name": "campaign_action_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã hành động chiến dịch"
+      },
+      {
+        "name": "webservice",
+        "type": "Nullable(String)",
+        "description": "Tên webservice API gọi đến"
+      },
+      {
+        "name": "request_time",
+        "type": "String",
+        "description": "Thời gian gửi tin truyền thông (định dạng YYYYMMDDHHMMSS)"
+      },
+      {
+        "name": "request",
+        "type": "Nullable(String)",
+        "description": "Nội dung bản tin gửi (XML/JSON payload)"
+      },
+      {
+        "name": "response_time",
+        "type": "String",
+        "description": "Thời gian phản hồi của kênh webservice"
+      },
+      {
+        "name": "status",
+        "type": "Nullable(String)",
+        "description": "Trạng thái gửi: status = '1' là kênh MYVIETTEL thành công, status = '200' là kênh CALLBOT thành công"
+      },
+      {
+        "name": "campaign_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã ID chiến dịch Marketing"
+      },
+      {
+        "name": "partition",
+        "type": "UInt32",
+        "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801)"
+      }
+    ],
+    "join_hints": [
+      "Join với f_adpm_aimkt_campaign_customer_detail qua isdn = msisdn để lọc thuê bao thuộc tập chiến dịch kênh MyViettel hoặc Callbot."
+    ],
+    "ddl": "CREATE TABLE webservice_log_v2_manh (\n    isdn String,\n    campaign_action_id Nullable(UInt64),\n    webservice Nullable(String),\n    url Nullable(String),\n    request_time String,\n    request Nullable(String),\n    response_time Nullable(String),\n    response Nullable(String),\n    status Nullable(String),\n    campaign_id Nullable(UInt64),\n    filed1 Nullable(String),\n    mode Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, isdn, request_time);"
+  },
+  {
+    "table_name": "sms_log_v2",
+    "description": "Bảng ghi log truyền thông kênh tin nhắn SMS.",
+    "columns": [
+      {
+        "name": "msisdn",
+        "type": "String",
+        "description": "Số điện thoại thuê bao nhận SMS (tương đương isdn)"
+      },
+      {
+        "name": "action_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã hành động gửi tin"
+      },
+      {
+        "name": "sender",
+        "type": "Nullable(String)",
+        "description": "Đầu số hoặc Brandname gửi tin (ví dụ: VIETTEL_KM, VIETTEL_CSKH)"
+      },
+      {
+        "name": "send_time",
+        "type": "String",
+        "description": "Thời gian gửi tin nhắn SMS (định dạng YYYYMMDDHHMMSS)"
+      },
+      {
+        "name": "status",
+        "type": "Nullable(String)",
+        "description": "Trạng thái gửi: status = '0' là gửi tin nhắn SMS thành công"
+      },
+      {
+        "name": "campaign_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã ID chiến dịch Marketing"
+      },
+      {
+        "name": "partition",
+        "type": "UInt32",
+        "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801)"
+      }
+    ],
+    "join_hints": [
+      "Join với f_adpm_aimkt_campaign_customer_detail qua msisdn để lọc ra tập thuê bao nhận SMS theo chiến dịch cụ thể."
+    ],
+    "ddl": "CREATE TABLE sms_log_v2 (\n    msisdn String,\n    action_id Nullable(UInt64),\n    sender Nullable(String),\n    send_time String,\n    status Nullable(String),\n    gateway Nullable(Int64),\n    duration Nullable(Int64),\n    transaction_id Nullable(String),\n    campaign_id Nullable(UInt64),\n    history_id Nullable(String),\n    type Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, msisdn, send_time);"
+  },
+  {
+    "table_name": "f_adpm_aimkt_campaign_customer_detail",
+    "description": "Bảng chi tiết danh sách khách hàng mục tiêu và cấu hình chiến dịch Marketing.",
+    "columns": [
+      {
+        "name": "msisdn",
+        "type": "String",
+        "description": "Số điện thoại thuê bao mục tiêu (tương đương isdn)"
+      },
+      {
+        "name": "program_code",
+        "type": "Nullable(String)",
+        "description": "Mã chương trình / Tên chiến dịch Marketing"
+      },
+      {
+        "name": "ten_usecase",
+        "type": "Nullable(String)",
+        "description": "Tên usecase hoặc tên chiến dịch thay thế (thường dùng chung với program_code)"
+      },
+      {
+        "name": "vas_name",
+        "type": "Nullable(String)",
+        "description": "Tên gói cước khuyến nghị (5G50, MT7Z, 5GMAX, 5G70, SD30S,...)"
+      },
+      {
+        "name": "channel",
+        "type": "Nullable(String)",
+        "description": "Kênh truyền thông khuyến nghị: SMS, MYVIETTEL, CALLBOT"
+      },
+      {
+        "name": "event_time",
+        "type": "Nullable(String)",
+        "description": "Khung giờ truyền thông (10h, 16h, 21h,...)"
+      },
+      {
+        "name": "group_flag",
+        "type": "Nullable(String)",
+        "description": "Nhóm thử nghiệm: TG (Target Group - nhóm nhận truyền thông), CONTROL (Nhóm đối chứng)"
+      },
+      {
+        "name": "cust_age",
+        "type": "Nullable(String)",
+        "description": "Nhóm độ tuổi khách hàng: hoc sinh, sinh vien, lao dong tre, trung nien, cao tuoi"
+      },
+      {
+        "name": "province_code_home",
+        "type": "Nullable(String)",
+        "description": "Mã tỉnh thành: HCM (Hồ Chí Minh), CTO (Cần Thơ), SLA (Sơn La), QNI (Quảng Ninh), HUE (Huế), CMU (Cà Mau), HNI (Hà Nội)..."
+      },
+      {
+        "name": "trangthai_truyenthong",
+        "type": "Nullable(String)",
+        "description": "Trạng thái: tttc (truyền thông thành công), ko_tttc"
+      },
+      {
+        "name": "price",
+        "type": "Nullable(Float64)",
+        "description": "Giá gói cước khuyến nghị"
+      },
+      {
+        "name": "partition",
+        "type": "UInt32",
+        "description": "Partition ngày dạng YYYYMMDD"
+      }
+    ],
+    "join_hints": [
+      "Bảng gốc chứa danh sách thuê bao thuộc từng chiến dịch, join với sms_log_v2 hoặc webservice_log_v2_manh để đo lường tỷ lệ gửi tin, và join với f023_mpre_vas_manh để đo lường doanh thu và tỷ lệ mua gói."
+    ],
+    "ddl": "CREATE TABLE f_adpm_aimkt_campaign_customer_detail (\n    msisdn String,\n    program_code Nullable(String),\n    ten_usecase Nullable(String),\n    vas_name Nullable(String),\n    channel Nullable(String),\n    event_time Nullable(String),\n    cdr_name Nullable(String),\n    group_flag Nullable(String),\n    cust_age Nullable(String),\n    province_code_home Nullable(String),\n    trangthai_truyenthong Nullable(String),\n    promo_label Nullable(String),\n    chu_ky_goi Nullable(String),\n    price Nullable(Float64),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, msisdn);"
+  }
+]

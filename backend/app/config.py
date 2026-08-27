@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     # Knowledge & RAG settings
     knowledge_collection_name: str = Field(default="business_knowledge", alias="KNOWLEDGE_COLLECTION_NAME")
     knowledge_file_path: str = Field(default="business_knowledge.json", alias="KNOWLEDGE_FILE_PATH")
+    schema_file_path: str = Field(default="schemas.json", alias="SCHEMA_FILE_PATH")
     enable_knowledge_rag: bool = Field(default=True, alias="ENABLE_KNOWLEDGE_RAG")
     enable_schema_rag: bool = Field(default=False, alias="ENABLE_SCHEMA_RAG")
     similarity_threshold: float = Field(default=0.65, alias="SIMILARITY_THRESHOLD")

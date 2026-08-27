@@ -2,6 +2,34 @@ import React, { useState, useRef } from 'react';
 import { Database, Copy, Check, Clock } from 'lucide-react';
 
 /**
+ * Nicely formats SQL query string by adding line breaks and indentation for major clauses.
+ */
+function formatSql(sql) {
+  if (!sql) return '';
+  let formatted = sql.trim();
+
+  // Normalize spaces
+  formatted = formatted.replace(/[ \t]+/g, ' ');
+
+  // Add newlines before major SQL clauses
+  const majorKeywords = [
+    'SELECT', 'FROM', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 
+    'FULL JOIN', 'CROSS JOIN', 'JOIN', 'WHERE', 'GROUP BY', 
+    'HAVING', 'ORDER BY', 'LIMIT', 'UNION ALL', 'UNION'
+  ];
+
+  majorKeywords.forEach((kw) => {
+    const regex = new RegExp(`\\b${kw}\\b`, 'gi');
+    formatted = formatted.replace(regex, (match) => `\n${match.toUpperCase()}`);
+  });
+
+  // Indent AND / OR conditions under WHERE/JOIN
+  formatted = formatted.replace(/\b(AND|OR)\b/gi, (match) => `\n  ${match.toUpperCase()}`);
+
+  return formatted.trim();
+}
+
+/**
  * Formats inline Markdown (bold **...**, italic *...*, code `...`) and newlines into React elements.
  */
 function renderFormattedText(rawText, keyPrefix = '') {
@@ -176,7 +204,7 @@ export const CitationText = ({ text, citations = [] }) => {
                   </button>
                 </div>
                 <pre className="citation-sql-code">
-                  <code>{citationData.query}</code>
+                  <code>{formatSql(citationData.query)}</code>
                 </pre>
               </div>
 

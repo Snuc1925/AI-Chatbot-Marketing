@@ -942,14 +942,17 @@ body {
 
 .citation-sql-code {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: #38bdf8;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 140px;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  max-height: 170px;
+  overflow-x: auto;
   overflow-y: auto;
+  padding: 4px 0;
 }
 
 .citation-preview-footer {

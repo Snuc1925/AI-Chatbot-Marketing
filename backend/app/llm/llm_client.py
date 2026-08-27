@@ -149,7 +149,7 @@ class LLMClient:
             "   - `clarifying_question`: null\n"
             "   - `suggested_options`: []\n"
             "   - `missing_slots`: []\n"
-            "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, không chứa ký tự escape sai).\n"
+            "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
             "4. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
             "{\n"
             '  "is_clarification_needed": true/false,\n'
@@ -159,7 +159,7 @@ class LLMClient:
             '  "missing_slots": ["slot_name"],\n'
             '  "suggested_answer": "Câu trả lời trực tiếp nếu không cần truy vấn DB hoặc null",\n'
             '  "generated_sqls": [\n'
-            '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "sql": "SELECT ... FROM ..."}\n'
+            '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "sql": "SELECT ... \\nFROM ... \\nWHERE ..."}\n'
             '  ],\n'
             '  "is_intent_switched": false\n'
             "}"

@@ -75,9 +75,9 @@ class KnowledgeService:
             logger.error("Failed to upsert knowledge records into vector store: %s", e)
             return {"status": "error", "synced_count": 0, "error": str(e)}
 
-    def retrieve_relevant_knowledge(self, query: str, top_k: int = 3, threshold: float = 0.35) -> list[str]:
+    def retrieve_relevant_knowledge_matches(self, query: str, top_k: int = 3, threshold: float = 0.35) -> list[VectorMatch]:
         """
-        Embeds user query and retrieves the top-k most relevant natural language business rule chunks.
+        Embeds user query and retrieves the top-k most relevant natural language business rule matches with similarity scores.
         """
         if not query or not query.strip():
             return []
@@ -86,15 +86,22 @@ class KnowledgeService:
             query_embedding = self.embedding_provider.embed_text(query.strip())
             matches: list[VectorMatch] = self.vector_store.query(embedding=query_embedding, top_k=top_k)
             # Filter matches by threshold
-            relevant_chunks = [m.document for m in matches if m.score >= threshold]
-            if not relevant_chunks and matches:
+            relevant_matches = [m for m in matches if m.score >= threshold]
+            if not relevant_matches and matches:
                 # If all below threshold, still return top-1 chunk if score is reasonable (> 0.25)
                 if matches[0].score >= 0.25:
-                    relevant_chunks = [matches[0].document]
-            return relevant_chunks
+                    relevant_matches = [matches[0]]
+            return relevant_matches
         except Exception as e:
             logger.error("Knowledge retrieval failed: %s", e)
             return []
+
+    def retrieve_relevant_knowledge(self, query: str, top_k: int = 3, threshold: float = 0.35) -> list[str]:
+        """
+        Embeds user query and retrieves the top-k most relevant natural language business rule chunks.
+        """
+        matches = self.retrieve_relevant_knowledge_matches(query=query, top_k=top_k, threshold=threshold)
+        return [m.document for m in matches]
 
     def get_all_knowledge(self) -> list[str]:
         """Loads and returns all knowledge chunks directly from file."""

@@ -142,10 +142,11 @@ class StreamChatService:
         relevant_knowledge: list[str] = []
         if self.knowledge_service:
             try:
-                relevant_knowledge = self.knowledge_service.retrieve_relevant_knowledge(user_query, top_k=3)
-                logger.info("  [Step 2: Knowledge RAG] Retrieved %d chunks", len(relevant_knowledge))
-                for idx, chunk in enumerate(relevant_knowledge, 1):
-                    logger.info("    -> Chunk %d: %s", idx, chunk[:120].replace('\n', ' '))
+                knowledge_matches = self.knowledge_service.retrieve_relevant_knowledge_matches(user_query, top_k=3)
+                relevant_knowledge = [m.document for m in knowledge_matches]
+                logger.info("  [Step 2: Knowledge RAG] Retrieved %d chunks", len(knowledge_matches))
+                for idx, match in enumerate(knowledge_matches, 1):
+                    logger.info("    -> Chunk %d (score=%.4f): %s", idx, match.score, match.document[:120].replace('\n', ' '))
             except Exception as e:
                 logger.warning("  [Step 2: Knowledge RAG] Retrieval failed: %s", e)
 

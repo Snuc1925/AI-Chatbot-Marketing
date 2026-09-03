@@ -62,6 +62,15 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Business knowledge store contains %d indexed chunks.", knowledge_count)
 
+        # Check and auto-sync SQL examples from sql_examples.json on startup
+        sql_examples_count = services.sql_examples_service.count()
+        if sql_examples_count == 0:
+            logger.info("SQL examples store is empty, running auto-sync from %s...", settings.sql_examples_file_path)
+            sql_result = services.sql_examples_service.sync_sql_examples(force_reset=False)
+            logger.info("Auto-sync SQL examples result: %s", sql_result)
+        else:
+            logger.info("SQL examples store contains %d indexed examples.", sql_examples_count)
+
         # Check ClickHouse connection
         if services.clickhouse_client.ping():
             logger.info("ClickHouse connection verified successfully.")

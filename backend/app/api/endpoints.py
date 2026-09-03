@@ -13,6 +13,10 @@ from app.knowledge.knowledge_manage_service import (
     KnowledgeRuleItem,
     KnowledgeRuleUpdate,
 )
+from app.knowledge.sql_examples_manage_service import (
+    SqlExampleCreate,
+    SqlExampleUpdate,
+)
 from app.services.chat_service import ChatRequest, ChatResponse
 from app.sessions.models import SessionState
 
@@ -22,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 class SyncKnowledgeRequest(BaseModel):
     force_reset: bool = False
+
+
+class SqlExampleModeRequest(BaseModel):
+    enable_rag: bool
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -143,6 +151,79 @@ async def list_knowledge_endpoint(request: Request) -> dict[str, Any]:
         "vector_store_count": count,
         "chunks": chunks,
     }
+
+
+# --- Few-Shot Golden SQL Examples Management & Sync ---
+
+@router.get("/sql-examples")
+async def list_sql_examples_endpoint(request: Request) -> dict[str, Any]:
+    """Lists all golden SQL examples and current RAG/Direct mode status."""
+    services = request.app.state.services
+    examples = services.sql_examples_manage_service.list_examples()
+    v_count = services.sql_examples_service.count()
+    is_rag = services.sql_examples_service.enable_sql_examples_rag
+    return {
+        "total_examples": len(examples),
+        "vector_store_count": v_count,
+        "enable_sql_examples_rag": is_rag,
+        "mode_label": "RAG Mode (Few-Shot Semantic Search)" if is_rag else "Full Fetch Mode (Direct Mode)",
+        "examples": examples,
+    }
+
+
+@router.post("/sql-examples")
+async def create_sql_example_endpoint(item: SqlExampleCreate, request: Request) -> dict[str, Any]:
+    """Creates a new SQL example and auto-syncs into Qdrant."""
+    services = request.app.state.services
+    try:
+        return services.sql_examples_manage_service.create_example(item, auto_sync=True)
+    except Exception as e:
+        logger.exception("Error creating SQL example: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/sql-examples/{example_id}")
+async def update_sql_example_endpoint(example_id: int, item: SqlExampleUpdate, request: Request) -> dict[str, Any]:
+    """Updates an existing SQL example and auto-syncs into Qdrant."""
+    services = request.app.state.services
+    try:
+        return services.sql_examples_manage_service.update_example(example_id, item, auto_sync=True)
+    except IndexError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Error updating SQL example: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/sql-examples/{example_id}")
+async def delete_sql_example_endpoint(example_id: int, request: Request) -> dict[str, Any]:
+    """Deletes an SQL example and auto-syncs into Qdrant."""
+    services = request.app.state.services
+    try:
+        return services.sql_examples_manage_service.delete_example(example_id, auto_sync=True)
+    except IndexError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Error deleting SQL example: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sql-examples/sync")
+async def sync_sql_examples_endpoint(request_body: SyncKnowledgeRequest, request: Request) -> dict[str, Any]:
+    """Force re-indexes all SQL examples into Qdrant."""
+    services = request.app.state.services
+    try:
+        return services.sql_examples_service.sync_sql_examples(force_reset=request_body.force_reset)
+    except Exception as e:
+        logger.exception("Error syncing SQL examples: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sql-examples/mode")
+async def set_sql_examples_mode_endpoint(mode_req: SqlExampleModeRequest, request: Request) -> dict[str, Any]:
+    """Toggles between RAG mode (semantic search) and Full Fetch mode (all examples)."""
+    services = request.app.state.services
+    return services.sql_examples_manage_service.set_rag_mode(mode_req.enable_rag)
 
 
 

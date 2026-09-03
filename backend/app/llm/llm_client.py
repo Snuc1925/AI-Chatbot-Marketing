@@ -122,35 +122,39 @@ class LLMClient:
         user_query: str,
         existing_slots: dict[str, Any] | None = None,
         business_knowledge: list[str] | None = None,
+        sql_examples: list[dict[str, Any]] | None = None,
         schema_context: str | None = None,
         chat_history: list[dict[str, str]] | None = None,
         is_follow_up: bool = False,
     ) -> ClarifyAnalysisResult:
         """
-        Analyzes the user's query against Business Knowledge and ClickHouse Schema.
+        Analyzes the user's query against Business Knowledge, Few-Shot SQL Examples, and ClickHouse Schema.
         Returns extracted slots, clarification requirements, ClickHouse SQL queries (if ready),
         and full LLM execution trace with token metrics.
         """
         system_prompt = (
             "Bạn là một Trợ lý AI Marketing Analytics chuyên nghiệp cho hệ thống Marketing của Viettel.\n"
-            "Nhiệm vụ của bạn là dựa vào quy tắc Tri thức Nghiệp vụ (Business Knowledge) và Cấu trúc cơ sở dữ liệu ClickHouse (Schema Context) "
-            "để phân tích câu hỏi của người dùng và sinh dữ liệu định dạng JSON chuẩn.\n\n"
+            "Nhiệm vụ của bạn là dựa vào quy tắc Tri thức Nghiệp vụ (Business Knowledge), Cấu trúc cơ sở dữ liệu ClickHouse (Schema Context) "
+            "và các Câu lệnh SQL Mẫu đã kiểm chứng (Few-Shot SQL Examples) để phân tích câu hỏi của người dùng và sinh dữ liệu định dạng JSON chuẩn.\n\n"
             "CÁC QUY TẮC BẮT BUỘC:\n"
             "1. Xác định ý định người dùng và trích xuất các thực thể (slots) như: tên chiến dịch (`campaign_name` hoặc `program_code`), "
             "khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
-            "2. Nếu câu hỏi của người dùng còn THIẾU thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác (ví dụ: người dùng hỏi 'Tỷ lệ nhắn tin thành công của chiến dịch tháng này' nhưng chưa nói rõ chiến dịch nào): "
+            "2. QUY TẮC ƯU TIÊN VỀ CÂU LỆNH SQL MẪU (FEW-SHOT SQL EXAMPLES):\n"
+            "   - Nếu được cung cấp các Câu lệnh SQL mẫu đã kiểm chứng, bạn PHẢI ƯU TIÊN THAM KHẢO VÀ DỰA VÀO CẤU TRÚC SQL NÀY (các bảng cần JOIN, tên cột chuẩn, điều kiện WHERE lọc `partition` dạng số `YYYYMMDD`, các hàm ClickHouse như `COUNTIf`, `toYYYYMM`, `toDate(toString(partition))`, v.v.) để sinh câu truy vấn SQL chính xác nhất.\n"
+            "   - Chỉ điều chỉnh các giá trị filter cụ thể (như ngày tháng, tên kênh, tên chiến dịch) phù hợp với câu hỏi hiện tại của người dùng.\n"
+            "3. Nếu câu hỏi của người dùng còn THIẾU thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác (ví dụ: người dùng hỏi 'Tỷ lệ nhắn tin thành công của chiến dịch tháng này' nhưng chưa nói rõ chiến dịch nào): "
             "   - Đặt `is_clarification_needed`: true\n"
             "   - Điền câu hỏi làm rõ tự nhiên, lịch sự vào `clarifying_question`.\n"
             "   - Điền danh sách 3-4 lựa chọn gợi ý cụ thể vào `suggested_options` (ví dụ: ['Chiến dịch 5G', 'Chiến dịch DATA', 'Chiến dịch Mua gói']).\n"
             "   - Liệt kê các slot còn thiếu vào `missing_slots` (ví dụ: ['campaign_name']).\n"
             "   - Để `generated_sqls`: [] (chưa sinh SQL khi thiếu thông tin).\n"
-            "3. Nếu câu hỏi ĐÃ ĐỦ thông tin để truy vấn:\n"
+            "4. Nếu câu hỏi ĐÃ ĐỦ thông tin để truy vấn:\n"
             "   - Đặt `is_clarification_needed`: false\n"
             "   - `clarifying_question`: null\n"
             "   - `suggested_options`: []\n"
             "   - `missing_slots`: []\n"
             "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
-            "4. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
+            "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
             "{\n"
             '  "is_clarification_needed": true/false,\n'
             '  "clarifying_question": "Câu hỏi làm rõ nếu cần hoặc null",\n'
@@ -172,7 +176,16 @@ class LLMClient:
 
         if business_knowledge:
             bk_text = "\n".join(f"- {k}" for k in business_knowledge)
-            user_content += f"--- TRI THỨC NGHIỆP VỤ LIÊN QUAN (BUSINESS KNOWLEDGE RAG) ---\n{bk_text}\n\n"
+            user_content += f"--- TRI THỨC NGHIỆP VỤ LIÊN QUAN (BUSINESS KNOWLEDGE) ---\n{bk_text}\n\n"
+
+        if sql_examples:
+            ex_blocks = []
+            for idx, ex in enumerate(sql_examples, 1):
+                q = ex.get("question", "") if isinstance(ex, dict) else getattr(ex, "question", "")
+                s = ex.get("sql", "") if isinstance(ex, dict) else getattr(ex, "sql", "")
+                ex_blocks.append(f"### [Mẫu {idx}] Câu hỏi: {q}\nSQL mẫu đã kiểm chứng:\n{s}\n")
+            ex_text = "\n".join(ex_blocks)
+            user_content += f"--- CÁC CÂU LỆNH SQL MẪU THAM KHẢO ĐÃ KIỂM CHỨNG (FEW-SHOT SQL EXAMPLES - ƯU TIÊN CAO) ---\n{ex_text}\n\n"
 
         if schema_context:
             user_content += f"--- CẤU TRÚC BẢNG DỮ LIỆU CLICKHOUSE (SCHEMA CONTEXT) ---\n{schema_context}\n\n"

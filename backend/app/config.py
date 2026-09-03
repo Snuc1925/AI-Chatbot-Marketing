@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     similarity_threshold: float = Field(default=0.65, alias="SIMILARITY_THRESHOLD")
     top_k: int = Field(default=3, alias="TOP_K")
 
+    # SQL Examples (Few-shot Golden SQLs) settings
+    sql_examples_collection_name: str = Field(default="sql_examples", alias="SQL_EXAMPLES_COLLECTION_NAME")
+    sql_examples_file_path: str = Field(default="sql_examples.json", alias="SQL_EXAMPLES_FILE_PATH")
+    enable_sql_examples_rag: bool = Field(default=True, alias="ENABLE_SQL_EXAMPLES_RAG")
+    sql_examples_top_k: int = Field(default=3, alias="SQL_EXAMPLES_TOP_K")
+    sql_examples_similarity_threshold: float = Field(default=0.35, alias="SQL_EXAMPLES_SIMILARITY_THRESHOLD")
+
     @field_validator(
         "embedding_base_url",
         "llm_base_url",

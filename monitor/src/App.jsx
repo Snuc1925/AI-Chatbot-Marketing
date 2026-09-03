@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { RealtimeLogView } from './components/RealtimeLogView';
 import { KnowledgeManagerView } from './components/KnowledgeManagerView';
-import { Activity, BookOpen, Layers, Terminal, ExternalLink } from 'lucide-react';
+import { SqlExamplesManagerView } from './components/SqlExamplesManagerView';
+import { Activity, BookOpen, Code2, Layers, Terminal, ExternalLink } from 'lucide-react';
 
 export default function App() {
-  const [activeMainTab, setActiveMainTab] = useState('monitor'); // 'monitor' | 'knowledge'
+  const [activeMainTab, setActiveMainTab] = useState('monitor'); // 'monitor' | 'knowledge' | 'sql_examples'
 
   return (
     <div className="admin-app">
@@ -30,7 +31,15 @@ export default function App() {
               onClick={() => setActiveMainTab('knowledge')}
             >
               <BookOpen size={16} />
-              <span>Cấu Hình Tri Thức (business_knowledge.json)</span>
+              <span>Tri Thức Nghiệp Vụ (business_knowledge.json)</span>
+            </button>
+
+            <button
+              className={`main-nav-tab ${activeMainTab === 'sql_examples' ? 'active' : ''}`}
+              onClick={() => setActiveMainTab('sql_examples')}
+            >
+              <Code2 size={16} />
+              <span>Mẫu Truy Vấn SQL (sql_examples.json)</span>
             </button>
           </div>
         </div>
@@ -53,6 +62,7 @@ export default function App() {
       <main className="admin-content-area">
         {activeMainTab === 'monitor' && <RealtimeLogView />}
         {activeMainTab === 'knowledge' && <KnowledgeManagerView />}
+        {activeMainTab === 'sql_examples' && <SqlExamplesManagerView />}
       </main>
     </div>
   );

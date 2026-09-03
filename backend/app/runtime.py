@@ -10,6 +10,8 @@ from app.database.schema_manager import SchemaManager
 from app.embeddings.openai_provider import OpenAIEmbeddingProvider
 from app.knowledge.knowledge_manage_service import KnowledgeManageService
 from app.knowledge.knowledge_service import KnowledgeService
+from app.knowledge.sql_examples_manage_service import SqlExamplesManageService
+from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient
 from app.llm.tools.schema_tool import SchemaAgentTool
 from app.services.chat_service import ChatService
@@ -24,11 +26,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ApplicationServices:
     knowledge_vector_store: QdrantVectorStore
+    sql_examples_vector_store: QdrantVectorStore
     embedding_provider: OpenAIEmbeddingProvider
     llm_client: LLMClient
     session_store: BaseSessionStore
     knowledge_service: KnowledgeService
     knowledge_manage_service: KnowledgeManageService
+    sql_examples_service: SqlExamplesService
+    sql_examples_manage_service: SqlExamplesManageService
     schema_manager: SchemaManager
     schema_manage_service: SchemaManageService
     schema_tool: SchemaAgentTool
@@ -110,10 +115,34 @@ class ApplicationServices:
             knowledge_file_path=settings.knowledge_file_path,
         )
 
-        # 7. Monitor Service
+        # 7. Vector store & Services for SQL Examples (Few-Shot Golden SQLs)
+        sql_examples_vector_store = QdrantVectorStore(
+            host=settings.qdrant_host,
+            port=settings.qdrant_port,
+            grpc_port=settings.qdrant_grpc_port,
+            api_key=settings.qdrant_api_key,
+            collection_name=settings.sql_examples_collection_name,
+            vector_size=settings.embedding_size,
+        )
+
+        sql_examples_service = SqlExamplesService(
+            vector_store=sql_examples_vector_store,
+            embedding_provider=embedding_provider,
+            sql_examples_file_path=settings.sql_examples_file_path,
+            enable_sql_examples_rag=settings.enable_sql_examples_rag,
+            similarity_threshold=settings.sql_examples_similarity_threshold,
+            top_k=settings.sql_examples_top_k,
+        )
+
+        sql_examples_manage_service = SqlExamplesManageService(
+            sql_examples_service=sql_examples_service,
+            sql_examples_file_path=settings.sql_examples_file_path,
+        )
+
+        # 8. Monitor Service
         monitor_service = MonitorService(max_traces=100)
 
-        # 8. Chat service & Stream Chat Service
+        # 9. Chat service & Stream Chat Service
         chat_service = ChatService(
             llm_client=llm_client,
             session_store=session_store,
@@ -121,6 +150,7 @@ class ApplicationServices:
             schema_manager=schema_manager,
             clickhouse_client=clickhouse_client,
             default_similarity_threshold=settings.similarity_threshold,
+            sql_examples_service=sql_examples_service,
         )
 
         stream_chat_service = StreamChatService(
@@ -130,6 +160,7 @@ class ApplicationServices:
             schema_manager=schema_manager,
             clickhouse_client=clickhouse_client,
             monitor_service=monitor_service,
+            sql_examples_service=sql_examples_service,
         )
 
         # Connect Monitor to chat services
@@ -138,11 +169,14 @@ class ApplicationServices:
 
         return cls(
             knowledge_vector_store=knowledge_vector_store,
+            sql_examples_vector_store=sql_examples_vector_store,
             embedding_provider=embedding_provider,
             llm_client=llm_client,
             session_store=session_store,
             knowledge_service=knowledge_service,
             knowledge_manage_service=knowledge_manage_service,
+            sql_examples_service=sql_examples_service,
+            sql_examples_manage_service=sql_examples_manage_service,
             schema_manager=schema_manager,
             schema_manage_service=schema_manage_service,
             schema_tool=schema_tool,

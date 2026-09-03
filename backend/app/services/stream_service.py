@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
+from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
 from app.services.monitor_service import MonitorService
@@ -45,6 +46,7 @@ class StreamChatService:
         schema_manager: SchemaManager | None = None,
         clickhouse_client: ClickHouseClient | None = None,
         monitor_service: MonitorService | None = None,
+        sql_examples_service: SqlExamplesService | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.session_store = session_store
@@ -52,6 +54,7 @@ class StreamChatService:
         self.schema_manager = schema_manager
         self.clickhouse_client = clickhouse_client
         self.monitor_service = monitor_service
+        self.sql_examples_service = sql_examples_service
 
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         t_request_start = time.perf_counter()
@@ -165,6 +168,47 @@ class StreamChatService:
             self.monitor_service.record_step(request_id, step_rag_data)
         yield sse_event("step_done", step_rag_data)
 
+        # 2.5. Step: Few-Shot Golden SQL Examples (Qdrant / Full)
+        t_step = time.perf_counter()
+        yield sse_event("step_start", {
+            "step": "SQL_EXAMPLES",
+            "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
+            "status": "running",
+        })
+
+        relevant_sql_examples: list[dict[str, Any]] = []
+        if self.sql_examples_service:
+            try:
+                sql_ex_items = self.sql_examples_service.retrieve_relevant_examples(user_query)
+                relevant_sql_examples = [{"question": item.question, "sql": item.sql} for item in sql_ex_items]
+                is_sql_rag = getattr(self.sql_examples_service, "enable_sql_examples_rag", True)
+                if is_sql_rag:
+                    logger.info("  [Step 2.5: SQL Examples RAG] Retrieved %d relevant golden SQLs (RAG Mode)", len(sql_ex_items))
+                    for idx, item in enumerate(sql_ex_items, 1):
+                        score_str = f"score={item.score:.4f}" if item.score is not None else "score=N/A"
+                        logger.info("    -> Example %d (%s): '%s'", idx, score_str, item.question[:100])
+                else:
+                    logger.info("  [Step 2.5: Full SQL Examples] Injected all %d golden SQL examples (Direct Mode)", len(relevant_sql_examples))
+                    for idx, item in enumerate(sql_ex_items, 1):
+                        logger.info("    -> Example %d: '%s'", idx, item.question[:100])
+            except Exception as e:
+                logger.warning("  [Step 2.5: SQL Examples] SQL examples retrieval failed: %s", e)
+
+        sql_ex_latency_ms = round((time.perf_counter() - t_step) * 1000, 2)
+        step_sql_ex_data = {
+            "step": "SQL_EXAMPLES",
+            "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
+            "status": "completed",
+            "latency_ms": sql_ex_latency_ms,
+            "data": {
+                "examples_count": len(relevant_sql_examples),
+                "examples": relevant_sql_examples,
+            },
+        }
+        if self.monitor_service:
+            self.monitor_service.record_step(request_id, step_sql_ex_data)
+        yield sse_event("step_done", step_sql_ex_data)
+
         # 3. Step: Schema Context
         t_step = time.perf_counter()
         yield sse_event("step_start", {
@@ -209,6 +253,7 @@ class StreamChatService:
                 user_query=user_query,
                 existing_slots=existing_slots,
                 business_knowledge=relevant_knowledge,
+                sql_examples=relevant_sql_examples,
                 schema_context=schema_context,
                 chat_history=request.chat_history,
                 is_follow_up=is_follow_up,

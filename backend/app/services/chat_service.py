@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
+from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.monitor_service import MonitorService
 from app.sessions.models import SessionState, SessionStatus
@@ -93,6 +94,7 @@ class ChatService:
         clickhouse_client: ClickHouseClient | None = None,
         default_similarity_threshold: float = 0.60,
         monitor_service: MonitorService | None = None,
+        sql_examples_service: SqlExamplesService | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.session_store = session_store
@@ -101,6 +103,7 @@ class ChatService:
         self.clickhouse_client = clickhouse_client
         self.default_similarity_threshold = default_similarity_threshold
         self.monitor_service = monitor_service
+        self.sql_examples_service = sql_examples_service
 
     def process_chat(self, request: ChatRequest) -> ChatResponse:
         t_start = time.perf_counter()
@@ -161,6 +164,25 @@ class ChatService:
             except Exception as e:
                 logger.warning("  [Step 2: Knowledge] Knowledge retrieval failed: %s", e)
 
+        # 2.5. Retrieve Few-Shot Golden SQL Examples
+        relevant_sql_examples: list[dict[str, Any]] = []
+        if self.sql_examples_service:
+            try:
+                sql_ex_items = self.sql_examples_service.retrieve_relevant_examples(user_query)
+                relevant_sql_examples = [{"question": item.question, "sql": item.sql} for item in sql_ex_items]
+                is_sql_rag = getattr(self.sql_examples_service, "enable_sql_examples_rag", True)
+                if is_sql_rag:
+                    logger.info("  [Step 2.5: SQL Examples RAG] Retrieved %d relevant golden SQLs (RAG Mode)", len(sql_ex_items))
+                    for idx, item in enumerate(sql_ex_items, 1):
+                        score_str = f"score={item.score:.4f}" if item.score is not None else "score=N/A"
+                        logger.info("    -> Example %d (%s): '%s'", idx, score_str, item.question[:100])
+                else:
+                    logger.info("  [Step 2.5: Full SQL Examples] Injected all %d golden SQL examples (Direct Mode)", len(relevant_sql_examples))
+                    for idx, item in enumerate(sql_ex_items, 1):
+                        logger.info("    -> Example %d: '%s'", idx, item.question[:100])
+            except Exception as e:
+                logger.warning("  [Step 2.5: SQL Examples] SQL examples retrieval failed: %s", e)
+
         # 3. Retrieve schema context
         schema_context: str = ""
         if self.schema_manager:
@@ -180,6 +202,7 @@ class ChatService:
                 user_query=user_query,
                 existing_slots=existing_slots,
                 business_knowledge=relevant_knowledge,
+                sql_examples=relevant_sql_examples,
                 schema_context=schema_context,
                 chat_history=request.chat_history,
                 is_follow_up=is_follow_up,

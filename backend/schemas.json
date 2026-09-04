@@ -63,11 +63,7 @@
         "type": "UInt32",
         "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801, bắt buộc lọc trong WHERE để tối ưu)"
       }
-    ],
-    "join_hints": [
-      "Join với f_adpm_aimkt_campaign_customer_detail qua isdn = msisdn và sub_service = vas_name để xác định thuê bao có mua đúng gói khuyến nghị trong chiến dịch hay không."
-    ],
-    "ddl": "CREATE TABLE f023_mpre_vas_manh (\n    topic_kafka Nullable(String),\n    filename Nullable(String),\n    prd_id Nullable(UInt32),\n    hour_id Nullable(String),\n    import_date Nullable(Date),\n    headnum_no Nullable(String),\n    isdn String,\n    vas_type Nullable(String),\n    vas_service Nullable(String),\n    sub_service Nullable(String),\n    action_no Nullable(String),\n    action_no2 Nullable(String),\n    vas_status Nullable(String),\n    command Nullable(String),\n    command2 Nullable(String),\n    charge_type Nullable(String),\n    sta_datetime Nullable(DateTime),\n    org_charge Nullable(Float64),\n    prom_charge Nullable(Float64),\n    tot_charge Nullable(Float64),\n    party_code Nullable(String),\n    description Nullable(String),\n    source_name Nullable(String),\n    direction_id Nullable(Float64),\n    insert_date Nullable(DateTime),\n    mm_charge Nullable(Float64),\n    mon Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, isdn);"
+    ]
   },
   {
     "table_name": "webservice_log_v2_manh",
@@ -118,11 +114,7 @@
         "type": "UInt32",
         "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801)"
       }
-    ],
-    "join_hints": [
-      "Join với f_adpm_aimkt_campaign_customer_detail qua isdn = msisdn để lọc thuê bao thuộc tập chiến dịch kênh MyViettel hoặc Callbot."
-    ],
-    "ddl": "CREATE TABLE webservice_log_v2_manh (\n    isdn String,\n    campaign_action_id Nullable(UInt64),\n    webservice Nullable(String),\n    url Nullable(String),\n    request_time String,\n    request Nullable(String),\n    response_time Nullable(String),\n    response Nullable(String),\n    status Nullable(String),\n    campaign_id Nullable(UInt64),\n    filed1 Nullable(String),\n    mode Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, isdn, request_time);"
+    ]
   },
   {
     "table_name": "sms_log_v2",
@@ -163,11 +155,7 @@
         "type": "UInt32",
         "description": "Partition ngày dạng YYYYMMDD (ví dụ: 20260801)"
       }
-    ],
-    "join_hints": [
-      "Join với f_adpm_aimkt_campaign_customer_detail qua msisdn để lọc ra tập thuê bao nhận SMS theo chiến dịch cụ thể."
-    ],
-    "ddl": "CREATE TABLE sms_log_v2 (\n    msisdn String,\n    action_id Nullable(UInt64),\n    sender Nullable(String),\n    send_time String,\n    status Nullable(String),\n    gateway Nullable(Int64),\n    duration Nullable(Int64),\n    transaction_id Nullable(String),\n    campaign_id Nullable(UInt64),\n    history_id Nullable(String),\n    type Nullable(String),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, msisdn, send_time);"
+    ]
   },
   {
     "table_name": "f_adpm_aimkt_campaign_customer_detail",
@@ -233,10 +221,6 @@
         "type": "UInt32",
         "description": "Partition ngày dạng YYYYMMDD"
       }
-    ],
-    "join_hints": [
-      "Bảng gốc chứa danh sách thuê bao thuộc từng chiến dịch, join với sms_log_v2 hoặc webservice_log_v2_manh để đo lường tỷ lệ gửi tin, và join với f023_mpre_vas_manh để đo lường doanh thu và tỷ lệ mua gói."
-    ],
-    "ddl": "CREATE TABLE f_adpm_aimkt_campaign_customer_detail (\n    msisdn String,\n    program_code Nullable(String),\n    ten_usecase Nullable(String),\n    vas_name Nullable(String),\n    channel Nullable(String),\n    event_time Nullable(String),\n    cdr_name Nullable(String),\n    group_flag Nullable(String),\n    cust_age Nullable(String),\n    province_code_home Nullable(String),\n    trangthai_truyenthong Nullable(String),\n    promo_label Nullable(String),\n    chu_ky_goi Nullable(String),\n    price Nullable(Float64),\n    partition UInt32\n) ENGINE = MergeTree()\nPARTITION BY partition\nORDER BY (partition, msisdn);"
+    ]
   }
 ]

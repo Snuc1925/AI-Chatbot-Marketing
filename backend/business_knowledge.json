@@ -1,11 +1,11 @@
 [
   {
     "topic": "Xác định số lượt gửi tin thành công theo từng kênh",
-    "description": "Tỉ lệ nhắn tin thành công = (Số lượt gửi thành công / Tổng lượt gửi) * 100%. Số lượt gửi thành công được xác định theo từng kênh truyền thông như sau:\n- Kênh SMS: Tra cứu trong bảng sms_log_v2 với điều kiện status = '0'.\n- Kênh MyViettel (myvt): Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '1'.\n- Kênh Callbot: Tra cứu trong bảng webservice_log_v2 với điều kiện status = '200'."
+    "description": "Tỉ lệ nhắn tin thành công = (Số lượt gửi thành công / Tổng lượt gửi) * 100%. Số lượt gửi thành công được xác định theo từng kênh truyền thông như sau:\n- Kênh SMS: Tra cứu trong bảng sms_log_v2 với điều kiện status = '0'.\n- Kênh MyViettel (myvt): Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '1'.\n- Kênh Callbot: Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '200'."
   },
   {
     "topic": "Xác định số thuê bao phản hồi và mua gói cước",
-    "description": "Để xác định số thuê bao phản hồi (mua gói cước): Thực hiện join bảng danh sách chi tiết chiến dịch f_adpm_aimkt_campaign_customer_detail với bảng ghi log truyền thông theo kênh (bảng sms_log_v2 với kênh SMS, bảng webservice_log_v2 với kênh MyViettel hoặc Callbot) bằng trường isdn hoặc msisdn để lọc ra tập thuê bao đã nhận tin thành công. Sau đó join tiếp với bảng log mua gói f023_mpre_vas_manh bằng isdn để kiểm tra thuê bao có mua đúng gói hay không (điều kiện: f023_mpre_vas_manh.sub_service = f_adpm_aimkt_campaign_customer_detail.vas_name) trong khoảng thời gian diễn ra chiến dịch."
+    "description": "Để xác định số thuê bao phản hồi (mua gói cước): Thực hiện join bảng danh sách chi tiết chiến dịch f_adpm_aimkt_campaign_customer_detail với bảng ghi log truyền thông theo kênh (bảng sms_log_v2 với kênh SMS, bảng webservice_log_v2_manh với kênh MyViettel hoặc Callbot) bằng trường isdn hoặc msisdn để lọc ra tập thuê bao đã nhận tin thành công. Sau đó join tiếp với bảng log mua gói f023_mpre_vas_manh bằng isdn để kiểm tra thuê bao có mua đúng gói hay không (điều kiện: f023_mpre_vas_manh.sub_service = f_adpm_aimkt_campaign_customer_detail.vas_name) trong khoảng thời gian diễn ra chiến dịch."
   },
   {
     "topic": "Quy tắc gán kênh mua gói và tính toán doanh thu",

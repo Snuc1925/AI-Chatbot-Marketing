@@ -1,9 +1,5 @@
--- ClickHouse Database Initialization Script
--- Auto-created for AI Marketing Chatbot
-
 CREATE DATABASE IF NOT EXISTS default;
 
--- 1. Bảng log mua gói VAS
 CREATE TABLE IF NOT EXISTS default.f023_mpre_vas_manh (
     topic_kafka Nullable(String),
     filename Nullable(String),
@@ -37,7 +33,6 @@ CREATE TABLE IF NOT EXISTS default.f023_mpre_vas_manh (
 PARTITION BY partition
 ORDER BY (partition, isdn);
 
--- 2. Bảng log truyền thông Webservice (MyViettel, Callbot)
 CREATE TABLE IF NOT EXISTS default.webservice_log_v2_manh (
     isdn String,
     campaign_action_id Nullable(UInt64),
@@ -56,7 +51,6 @@ CREATE TABLE IF NOT EXISTS default.webservice_log_v2_manh (
 PARTITION BY partition
 ORDER BY (partition, isdn, request_time);
 
--- 3. Bảng log truyền thông SMS
 CREATE TABLE IF NOT EXISTS default.sms_log_v2 (
     msisdn String,
     action_id Nullable(UInt64),
@@ -74,7 +68,6 @@ CREATE TABLE IF NOT EXISTS default.sms_log_v2 (
 PARTITION BY partition
 ORDER BY (partition, msisdn, send_time);
 
--- 4. Bảng chi tiết danh sách khách hàng và chiến dịch
 CREATE TABLE IF NOT EXISTS default.f_adpm_aimkt_campaign_customer_detail (
     msisdn String,
     program_code Nullable(String),
@@ -96,24 +89,10 @@ CREATE TABLE IF NOT EXISTS default.f_adpm_aimkt_campaign_customer_detail (
 PARTITION BY partition
 ORDER BY (partition, msisdn);
 
--- 5. Seed Mock Data for testing and validation
-INSERT INTO default.f_adpm_aimkt_campaign_customer_detail (msisdn, program_code, vas_name, channel, event_time, cdr_name, group_flag, cust_age, province_code_home, trangthai_truyenthong, ten_usecase, partition) VALUES
-('84981234567', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'lao dong tre', 'HNI', 'tttc', 'không gói vào gói 5 tỉnh', 20260810),
-('84987654321', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'sinh vien', 'HCM', 'tttc', 'không gói vào gói 5 tỉnh', 20260810),
-('84912345678', 'mxh_low@wifi_partial&p2', '5G70', 'MYVIETTEL', '16h', 'PTDL', 'TG', 'trung nien', 'CTO', 'tttc', 'không gói vào gói 5 tỉnh', 20260810),
-('84976543210', 'mxh_low@wifi_partial&p2', '5GMAX', 'CALLBOT', '21h', 'PTDL', 'TG', 'cao tuoi', 'SLA', 'tttc', 'không gói vào gói 5 tỉnh', 20260810),
-('84988888888', 'mxh_high&not_wifi&p2', 'MT7Z', 'SMS', '10h', 'PTDL', 'CONTROL', 'hoc sinh', 'QNI', 'ko_tttc', 'không gói vào gói 5 tỉnh', 20260810);
+INSERT INTO default.f_adpm_aimkt_campaign_customer_detail (msisdn, program_code, vas_name, channel, event_time, cdr_name, group_flag, cust_age, province_code_home, trangthai_truyenthong, ten_usecase, partition) VALUES ('84981234567', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'lao dong tre', 'HNI', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84987654321', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'sinh vien', 'HCM', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84912345678', 'mxh_low@wifi_partial&p2', '5G70', 'MYVIETTEL', '16h', 'PTDL', 'TG', 'trung nien', 'CTO', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84976543210', 'mxh_low@wifi_partial&p2', '5GMAX', 'CALLBOT', '21h', 'PTDL', 'TG', 'cao tuoi', 'SLA', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84988888888', 'mxh_high&not_wifi&p2', 'MT7Z', 'SMS', '10h', 'PTDL', 'CONTROL', 'hoc sinh', 'QNI', 'ko_tttc', 'không gói vào gói 5 tỉnh', 20260810);
 
-INSERT INTO default.sms_log_v2 (msisdn, action_id, sender, send_time, status, gateway, campaign_id, history_id, partition) VALUES
-('84981234567', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810),
-('84987654321', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810),
-('84988888888', 41009, 'VIETTEL_KM', '20260810100500', '-1007M', -1000, 99080, NULL, 20260810);
+INSERT INTO default.sms_log_v2 (msisdn, action_id, sender, send_time, status, gateway, campaign_id, history_id, partition) VALUES ('84981234567', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84987654321', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84988888888', 41009, 'VIETTEL_KM', '20260810100500', '-1007M', -1000, 99080, NULL, 20260810);
 
-INSERT INTO default.webservice_log_v2_manh (isdn, campaign_action_id, webservice, request_time, status, campaign_id, mode, partition) VALUES
-('84912345678', 44897, '1549', '20260810160200', '1', 101471, 'ONLINE', 20260810),
-('84976543210', 44898, '1530', '20260810210500', '200', 101472, 'ONLINE', 20260810);
+INSERT INTO default.webservice_log_v2_manh (isdn, campaign_action_id, webservice, request_time, status, campaign_id, mode, partition) VALUES ('84912345678', 44897, '1549', '20260810160200', '1', 101471, 'ONLINE', 20260810), ('84976543210', 44898, '1530', '20260810210500', '200', 101472, 'ONLINE', 20260810);
 
-INSERT INTO default.f023_mpre_vas_manh (isdn, vas_type, vas_service, sub_service, action_no, sta_datetime, tot_charge, description, partition) VALUES
-('84981234567', 'VIETTEL', '5G50', '5G50', 'DK', '2026-08-10 10:35:00', 50000.0, 'Đăng ký gói 5G50', 20260810),
-('84912345678', 'VIETTEL', '5G70', '5G70', 'DK', '2026-08-10 16:45:00', 70000.0, 'Đăng ký gói 5G70', 20260810);
-
+INSERT INTO default.f023_mpre_vas_manh (isdn, vas_type, vas_service, sub_service, action_no, sta_datetime, tot_charge, description, partition) VALUES ('84981234567', 'VIETTEL', '5G50', '5G50', 'DK', '2026-08-10 10:35:00', 50000.0, 'Đăng ký gói 5G50', 20260810), ('84912345678', 'VIETTEL', '5G70', '5G70', 'DK', '2026-08-10 16:45:00', 70000.0, 'Đăng ký gói 5G70', 20260810);

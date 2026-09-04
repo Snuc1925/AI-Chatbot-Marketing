@@ -57,15 +57,17 @@ class SqlExamplesManageService:
     def _save_rules(self, rules: list[dict[str, Any]]) -> None:
         file_path = self._resolve_file_path()
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Re-assign sequential IDs
-        for idx, item in enumerate(rules):
-            item["id"] = idx
+        # "id" is purely positional (index in the list) and must not be
+        # persisted - only question/sql are stored in the file.
+        clean_rules = [{"question": r.get("question", ""), "sql": r.get("sql", "")} for r in rules]
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(rules, f, ensure_ascii=False, indent=2)
-        logger.info("Saved %d SQL examples to %s", len(rules), file_path)
+            json.dump(clean_rules, f, ensure_ascii=False, indent=2)
+        logger.info("Saved %d SQL examples to %s", len(clean_rules), file_path)
 
     def list_examples(self) -> list[dict[str, Any]]:
         raw = self._load_raw_rules()
+        # "id" here is just the list position, attached for the API response
+        # only - it is never written back to the file.
         for idx, r in enumerate(raw):
             r["id"] = idx
         return raw
@@ -73,12 +75,12 @@ class SqlExamplesManageService:
     def create_example(self, example: SqlExampleCreate, auto_sync: bool = True) -> dict[str, Any]:
         rules = self._load_raw_rules()
         new_item = {
-            "id": len(rules),
             "question": example.question.strip(),
             "sql": example.sql.strip(),
         }
         rules.append(new_item)
         self._save_rules(rules)
+        new_item["id"] = len(rules) - 1
         logger.info("Created new SQL example: '%s'", new_item["question"][:50])
 
         sync_result = None
@@ -119,7 +121,7 @@ class SqlExamplesManageService:
         return {
             "status": "success",
             "message": f"Đã cập nhật câu lệnh SQL mẫu #{example_id} thành công.",
-            "example": rules[example_id],
+            "example": {**rules[example_id], "id": example_id},
             "sync_result": sync_result,
         }
 

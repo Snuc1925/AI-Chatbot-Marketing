@@ -5,9 +5,9 @@ services:
     build:
       context: ./frontend
       args:
-        HTTP_PROXY: ${HTTP_PROXY-}
-        HTTPS_PROXY: ${HTTPS_PROXY-}
-        NO_PROXY: ${NO_PROXY-}
+        HTTP_PROXY: ${APP_HTTP_PROXY-}
+        HTTPS_PROXY: ${APP_HTTPS_PROXY-}
+        NO_PROXY: ${APP_NO_PROXY-}
     command: ["npm", "run", "dev"]
     ports:
       - "3000:3000"
@@ -23,9 +23,9 @@ services:
     build:
       context: ./monitor
       args:
-        HTTP_PROXY: ${HTTP_PROXY-}
-        HTTPS_PROXY: ${HTTPS_PROXY-}
-        NO_PROXY: ${NO_PROXY-}
+        HTTP_PROXY: ${APP_HTTP_PROXY-}
+        HTTPS_PROXY: ${APP_HTTPS_PROXY-}
+        NO_PROXY: ${APP_NO_PROXY-}
     command: ["npm", "run", "dev"]
     ports:
       - "3001:3001"
@@ -42,21 +42,21 @@ services:
     build:
       context: ./backend
       args:
-        HTTP_PROXY: ${HTTP_PROXY-}
-        HTTPS_PROXY: ${HTTPS_PROXY-}
-        NO_PROXY: ${NO_PROXY-}
+        HTTP_PROXY: ${APP_HTTP_PROXY-}
+        HTTPS_PROXY: ${APP_HTTPS_PROXY-}
+        NO_PROXY: ${APP_NO_PROXY-}
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app/backend
     environment:
-      - HTTP_PROXY=${HTTP_PROXY-}
-      - HTTPS_PROXY=${HTTPS_PROXY-}
-      - NO_PROXY=${NO_PROXY-}
-      - http_proxy=${HTTP_PROXY-}
-      - https_proxy=${HTTPS_PROXY-}
-      - no_proxy=${NO_PROXY-}
+      - HTTP_PROXY=${APP_HTTP_PROXY-}
+      - HTTPS_PROXY=${APP_HTTPS_PROXY-}
+      - NO_PROXY=${APP_NO_PROXY-}
+      - http_proxy=${APP_HTTP_PROXY-}
+      - https_proxy=${APP_HTTPS_PROXY-}
+      - no_proxy=${APP_NO_PROXY-}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_GRPC_PORT=6334

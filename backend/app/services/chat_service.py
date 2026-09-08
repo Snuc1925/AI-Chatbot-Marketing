@@ -45,6 +45,29 @@ def log_llm_interaction(logger_inst: logging.Logger, step_name: str, trace: LLMT
     )
 
 
+def _is_error_result(raw_result: Any) -> bool:
+    """True if a SQL citation's raw_result is the `[{"error": ...}]` shape written
+    by the ClickHouse execution except-clause below (as opposed to a real, empty,
+    or non-empty result set)."""
+    return (
+        isinstance(raw_result, list)
+        and len(raw_result) == 1
+        and isinstance(raw_result[0], dict)
+        and "error" in raw_result[0]
+    )
+
+
+def all_sqls_errored(citations: list[CitationItem]) -> bool:
+    """
+    True only if this turn generated at least one SQL AND every single one of
+    them failed to execute - used to flag ConversationTurn.had_sql_errors so a
+    bad extracted slot value (e.g. campaign_id='5G') isn't silently trusted as
+    confirmed fact in a later turn's context. A turn with zero SQLs (e.g. a
+    direct suggested_answer) is NOT considered "errored" here.
+    """
+    return bool(citations) and all(_is_error_result(c.raw_result) for c in citations)
+
+
 class CitationItem(BaseModel):
     id: str = Field(description="Unique ID matching <cite id='...'> in message, e.g. 'sql_1'")
     type: str = Field(default="sql", description="Type of citation: 'sql', 'knowledge', etc.")
@@ -80,7 +103,6 @@ class ChatResponse(BaseModel):
     intent_reasoning: str = Field(default="", description="LLM's chain-of-thought behind is_clarification_needed/extracted_entities - for debugging prompt & business knowledge")
     collected_slots: dict[str, Any] = Field(default_factory=dict)
     missing_slots: list[str] = Field(default_factory=list)
-    suggested_options: list[str] = Field(default_factory=list, description="Dynamic quick reply options suggested by LLM for current question")
     relevant_knowledge: list[str] = Field(default_factory=list, description="Relevant business rules retrieved from knowledge base")
     generated_sql: str | None = None
     generated_sqls: list[SqlQueryItem] = Field(default_factory=list, description="All SQL queries generated for this question")
@@ -282,7 +304,7 @@ class ChatService:
             self.session_store.save(session_state)
 
             bot_msg = analysis.clarifying_question or "Bạn vui lòng cung cấp thêm thông tin để hệ thống hỗ trợ tra cứu."
-            logger.info("  [Response: CLARIFY] Question: '%s' | Suggested options: %s", bot_msg, analysis.suggested_options)
+            logger.info("  [Response: CLARIFY] Question: '%s'", bot_msg)
             clarify_resp = ChatResponse(
                 session_id=session_id,
                 session_status=session_state.status.value,
@@ -291,7 +313,6 @@ class ChatService:
                 intent_reasoning=analysis.intent_reasoning,
                 collected_slots=session_state.collected_slots,
                 missing_slots=session_state.missing_slots,
-                suggested_options=analysis.suggested_options,
                 relevant_knowledge=relevant_knowledge,
                 generated_sql=analysis.generated_sql,
                 generated_sqls=analysis.generated_sqls,
@@ -318,13 +339,16 @@ class ChatService:
 
         # Record this completed turn server-side (with the actual SQL/reasoning
         # used) so the NEXT turn's chat_history_text has real grounded context
-        # instead of a dangling <cite id="sql_X"> reference.
+        # instead of a dangling <cite id="sql_X"> reference. If every SQL this
+        # turn failed to execute (e.g. a bad slot value like campaign_id='5G'),
+        # flag it so the next turn doesn't blindly trust these entities as fact.
         session_state.add_turn(
             ConversationTurn(
                 user_query=user_query,
                 extracted_entities=final_slots,
                 generated_sqls=[s.model_dump() for s in analysis.generated_sqls],
                 bot_message=bot_msg,
+                had_sql_errors=all_sqls_errored(citations),
             )
         )
         self.session_store.save(session_state)
@@ -337,7 +361,6 @@ class ChatService:
             intent_reasoning=analysis.intent_reasoning,
             collected_slots=final_slots,
             missing_slots=[],
-            suggested_options=[],
             relevant_knowledge=relevant_knowledge,
             generated_sql=analysis.generated_sql,
             generated_sqls=analysis.generated_sqls,

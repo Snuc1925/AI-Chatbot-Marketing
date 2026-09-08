@@ -484,6 +484,60 @@ body {
   word-break: break-word;
 }
 
+/* Reasoning Dropdown - collapsed by default, shown before the answer bubble */
+.reasoning-toggle-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reasoning-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.reasoning-toggle-btn:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.reasoning-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.reasoning-block-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--primary-dark);
+  margin-bottom: 2px;
+}
+
+.reasoning-block-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .bubble.user {
   background: var(--bg-bubble-user);
   color: #ffffff;

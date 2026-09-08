@@ -1,12 +1,21 @@
-import React from 'react';
-import { User, Bot, Sparkles, CheckCircle2, Database } from 'lucide-react';
-import { QuickReplyChips } from './QuickReplyChips';
+import React, { useState } from 'react';
+import { User, Bot, Sparkles, CheckCircle2, Database, ChevronRight, ChevronDown, Brain } from 'lucide-react';
+// HIDDEN (not deleted): quick-reply chips are intentionally disabled - the LLM
+// no longer generates suggested_options (one consolidated free-text question
+// is asked instead), so there's nothing left to render chips from. Re-enable
+// by uncommenting this import and the usage below.
+// import { QuickReplyChips } from './QuickReplyChips';
 import { CitationText } from './CitationText';
 
 export const ChatMessage = ({ message, onQuickReply, isLastMessage, isSubmitting }) => {
   const isUser = message.role === 'user';
   const isClarify = message.response_type === 'clarify';
   const isAnswer = message.response_type === 'answer';
+
+  const [isReasoningOpen, setIsReasoningOpen] = useState(false);
+  const hasReasoning =
+    !isUser &&
+    (message.intent_reasoning || (message.generated_sqls || []).some((s) => s.reasoning));
 
   return (
     <div className={`message-row ${isUser ? 'user' : 'bot'}`}>
@@ -16,26 +25,40 @@ export const ChatMessage = ({ message, onQuickReply, isLastMessage, isSubmitting
 
       <div className="message-content">
 
+        {/* Reasoning Dropdown - collapsed by default, shows how the AI reasoned
+            about the intent and (if any) each generated SQL, before the answer. */}
+        {hasReasoning && (
+          <div className="reasoning-toggle-wrapper">
+            <button
+              type="button"
+              className="reasoning-toggle-btn"
+              onClick={() => setIsReasoningOpen((prev) => !prev)}
+            >
+              {isReasoningOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Brain size={13} />
+              <span>Xem lý luận của AI (Reasoning)</span>
+            </button>
 
-        {/* Relevant Knowledge Tags */}
-        {!isUser && message.relevant_knowledge && message.relevant_knowledge.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '6px' }}>
-            {message.relevant_knowledge.map((k, idx) => (
-              <div
-                key={idx}
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
-                  background: 'rgba(241, 245, 249, 0.9)',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-light)',
-                  lineHeight: '1.4',
-                }}
-              >
-                💡 <em>{k.length > 120 ? k.slice(0, 120) + '...' : k}</em>
+            {isReasoningOpen && (
+              <div className="reasoning-panel">
+                {message.intent_reasoning && (
+                  <div className="reasoning-block">
+                    <div className="reasoning-block-label">Ý định & quyết định</div>
+                    <p className="reasoning-block-text">{message.intent_reasoning}</p>
+                  </div>
+                )}
+                {(message.generated_sqls || [])
+                  .filter((s) => s.reasoning)
+                  .map((s, idx) => (
+                    <div key={s.id || idx} className="reasoning-block">
+                      <div className="reasoning-block-label">
+                        SQL [{s.id}]{s.title ? ` - ${s.title}` : ''}
+                      </div>
+                      <p className="reasoning-block-text">{s.reasoning}</p>
+                    </div>
+                  ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -70,17 +93,17 @@ export const ChatMessage = ({ message, onQuickReply, isLastMessage, isSubmitting
           </div>
         )}
 
-        {/* Quick Reply Chips (Only active on latest message if clarify) */}
-        {!isUser && isClarify && (
+        {/* HIDDEN (not deleted): Quick Reply Chips - no suggested_options from
+            the backend anymore, user always types their own reply now. */}
+        {/* {!isUser && isClarify && (
           <QuickReplyChips
             options={message.suggested_options}
             text={message.content}
             onSelectOption={onQuickReply}
             disabled={!isLastMessage || isSubmitting}
           />
-        )}
+        )} */}
       </div>
     </div>
   );
 };
-

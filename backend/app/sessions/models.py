@@ -29,6 +29,13 @@ class ConversationTurn(BaseModel):
         default_factory=list, description="Each item: {id, title, reasoning, sql} - the SQL(s) actually used to answer this turn"
     )
     bot_message: str = ""
+    had_sql_errors: bool = Field(
+        default=False,
+        description="True if every generated SQL in this turn failed to execute (e.g. a bad slot value like "
+        "campaign_id='5G' caused a type error). When true, the extracted_entities recorded for this turn are NOT "
+        "confirmed facts - format_conversation_history() flags them so a later turn doesn't blindly trust and reuse "
+        "a value that was never actually validated against the database.",
+    )
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -47,7 +54,14 @@ def format_conversation_history(turns: list[ConversationTurn], max_turns: int = 
     for turn in turns[-max_turns:]:
         lines = [f"user: {turn.user_query}"]
         if turn.extracted_entities:
-            lines.append(f"  (thông tin đã xác định: {json.dumps(turn.extracted_entities, ensure_ascii=False)})")
+            if turn.had_sql_errors:
+                lines.append(
+                    f"  (CẢNH BÁO: câu SQL sinh ra ở lượt này đều bị lỗi khi thực thi - các giá trị dưới đây CHƯA ĐƯỢC XÁC MINH "
+                    f"với database, đừng coi là đúng/đủ nếu không chắc chắn, có thể cần hỏi lại người dùng: "
+                    f"{json.dumps(turn.extracted_entities, ensure_ascii=False)})"
+                )
+            else:
+                lines.append(f"  (thông tin đã xác định: {json.dumps(turn.extracted_entities, ensure_ascii=False)})")
         for sql in turn.generated_sqls:
             sql_id = sql.get("id", "")
             title = sql.get("title", "")

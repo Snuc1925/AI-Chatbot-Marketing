@@ -26,29 +26,39 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "mà chính là bước lý luận để bạn DỰA VÀO ĐÓ mà quyết định `is_clarification_needed`.\n"
         "   - Với MỖI phần tử trong `generated_sqls`, bạn PHẢI điền field `reasoning` (1-3 câu) NGAY TRƯỚC field `sql` của chính phần tử đó (không viết chung 1 đoạn cho tất cả các câu SQL). "
         "Nội dung: chọn bảng/cột nào, vì sao JOIN như vậy, áp dụng quy tắc Business Knowledge hoặc SQL Mẫu nào. Đây là bước lý luận để bạn DỰA VÀO ĐÓ mà viết ra `sql` của chính câu đó, không phải giải thích ngược sau khi SQL đã viết xong.\n"
-        "1. Xác định ý định người dùng và trích xuất các thực thể (slots) như: tên chiến dịch (`campaign_name` hoặc `program_code`), "
-        "khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
+        "1. Xác định ý định người dùng và trích xuất các thực thể (slots):\n"
+        "   - `campaign_id`: mã định danh chiến dịch, LUÔN LUÔN LÀ SỐ (kiểu UInt64), chỉ tồn tại ở các bảng LOG GỬI TIN "
+        "`webservice_log_v2_manh` và `sms_log_v2`. Hệ thống HIỆN KHÔNG có bảng tra cứu tên/nhãn chiến dịch sang mã số. "
+        "Vì vậy nếu người dùng chỉ nói TÊN hoặc NHÃN chiến dịch (ví dụ 'chiến dịch 5G', 'chiến dịch DATA') mà KHÔNG cho con số cụ thể, "
+        "đó KHÔNG ĐỦ để điền `campaign_id` - phải coi là còn thiếu thông tin và hỏi lại người dùng đúng con số campaign_id, "
+        "TUYỆT ĐỐI KHÔNG được tự suy đoán/gán nhãn chữ (như '5G') vào `campaign_id`.\n"
+        "   - Lưu ý: bảng `f_adpm_aimkt_campaign_customer_detail` (cột `program_code`, `ten_usecase`) KHÔNG liên quan đến việc định danh chiến dịch - "
+        "TUYỆT ĐỐI không dùng `program_code`/`ten_usecase` để lọc hay xác định chiến dịch theo `campaign_id`.\n"
+        "   - Các slot khác: khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), "
+        "nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
         "2. QUY TẮC ƯU TIÊN VỀ CÂU LỆNH SQL MẪU (FEW-SHOT SQL EXAMPLES):\n"
         "   - Nếu được cung cấp các Câu lệnh SQL mẫu đã kiểm chứng, bạn PHẢI ƯU TIÊN THAM KHẢO VÀ DỰA VÀO CẤU TRÚC SQL NÀY (các bảng cần JOIN, tên cột chuẩn, điều kiện WHERE lọc `partition` dạng số `YYYYMMDD`, các hàm ClickHouse như `COUNTIf`, `toYYYYMM`, `toDate(toString(partition))`, v.v.) để sinh câu truy vấn SQL chính xác nhất.\n"
-        "   - Chỉ điều chỉnh các giá trị filter cụ thể (như ngày tháng, tên kênh, tên chiến dịch) phù hợp với câu hỏi hiện tại của người dùng.\n"
-        "3. Nếu câu hỏi của người dùng còn THIẾU thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác (ví dụ: người dùng hỏi 'Tỷ lệ nhắn tin thành công của chiến dịch tháng này' nhưng chưa nói rõ chiến dịch nào): "
+        "   - Chỉ điều chỉnh các giá trị filter cụ thể (như ngày tháng, tên kênh, mã chiến dịch) phù hợp với câu hỏi hiện tại của người dùng.\n"
+        "3. Nếu câu hỏi của người dùng còn THIẾU một hoặc nhiều thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác:\n"
         "   - Đặt `is_clarification_needed`: true\n"
-        "   - Điền câu hỏi làm rõ tự nhiên, lịch sự vào `clarifying_question`.\n"
-        "   - Điền danh sách 3-4 lựa chọn gợi ý cụ thể vào `suggested_options` (ví dụ: ['Chiến dịch 5G', 'Chiến dịch DATA', 'Chiến dịch Mua gói']).\n"
-        "   - Liệt kê các slot còn thiếu vào `missing_slots` (ví dụ: ['campaign_name']).\n"
+        "   - Điền vào `clarifying_question` MỘT câu hỏi tự nhiên, lịch sự, DUY NHẤT gộp chung TẤT CẢ các thông tin còn thiếu trong cùng một câu "
+        "(ví dụ: 'Bạn vui lòng cho mình biết mã chiến dịch (campaign_id) cụ thể, kênh truyền thông và khoảng thời gian bạn muốn tra cứu nhé?'). "
+        "KHÔNG hỏi từng thông tin một qua nhiều lượt nếu đã biết trước là thiếu nhiều thứ - hỏi gộp hết một lần để tiết kiệm lượt hỏi của người dùng. "
+        "KHÔNG đưa ra danh sách lựa chọn dựng sẵn (không có field suggested_options nữa) - để người dùng tự trả lời bằng văn bản tự do.\n"
+        "   - Nếu đây là lượt hỏi lại tiếp theo (đã có 'CÁC THÔNG TIN ĐÃ THU THẬP TRƯỚC ĐÓ' trong ngữ cảnh), CHỈ hỏi về đúng phần THỰC SỰ còn thiếu "
+        "sau khi đối chiếu với thông tin đã có - TUYỆT ĐỐI không hỏi lại thông tin đã được cung cấp trước đó.\n"
+        "   - Liệt kê các slot còn thiếu vào `missing_slots` (ví dụ: ['campaign_id', 'channel']).\n"
         "   - Để `generated_sqls`: [] (chưa sinh SQL khi thiếu thông tin).\n"
         "4. Nếu câu hỏi ĐÃ ĐỦ thông tin để truy vấn:\n"
         "   - Đặt `is_clarification_needed`: false\n"
         "   - `clarifying_question`: null\n"
-        "   - `suggested_options`: []\n"
         "   - `missing_slots`: []\n"
         "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, `reasoning` theo đúng Quy tắc 0, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
         "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC (chú ý thứ tự field - `intent_reasoning` và `reasoning` luôn đứng trước phần chúng dẫn dắt):\n"
         "{\n"
         '  "intent_reasoning": "1-3 câu lý luận về ý định & việc có cần hỏi lại hay không",\n'
         '  "is_clarification_needed": true/false,\n'
-        '  "clarifying_question": "Câu hỏi làm rõ nếu cần hoặc null",\n'
-        '  "suggested_options": ["Lựa chọn 1", "Lựa chọn 2"],\n'
+        '  "clarifying_question": "Một câu hỏi làm rõ DUY NHẤT gộp hết các thông tin còn thiếu, hoặc null",\n'
         '  "extracted_entities": {"slot_name": "value"},\n'
         '  "missing_slots": ["slot_name"],\n'
         '  "suggested_answer": "Câu trả lời trực tiếp nếu không cần truy vấn DB hoặc null",\n'
@@ -68,8 +78,13 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "   - Ví dụ: 'Doanh thu chiến dịch đạt <cite id=\"sql_1\">3.500.000.000 VNĐ</cite> với tỷ lệ gửi thành công là <cite id=\"sql_2\">98.7%</cite>.'\n"
         "   - Ví dụ: 'Tổng số <cite id=\"sql_1\">15.420</cite> thuê bao đã mua gói cước thành công.'\n"
         "2. Trình bày số liệu rõ ràng, dễ hiểu, format số hàng nghìn bằng dấu chấm (ví dụ: 1.000.000) và giữ giọng điệu chuyên nghiệp.\n"
-        "3. Không tự bịa số liệu nếu trong kết quả query không có. Nếu query không có dữ liệu (kết quả rỗng), hãy thông báo rõ ràng là chưa ghi nhận số liệu trong khoảng thời gian này.\n"
-        "4. Trả về trực tiếp nội dung văn bản câu trả lời (Markdown), KHÔNG bọc trong JSON."
+        "3. Không tự bịa số liệu nếu trong kết quả query không có. Nếu query không có dữ liệu (kết quả rỗng, 0 dòng), hãy thông báo rõ ràng là chưa ghi nhận số liệu trong khoảng thời gian này.\n"
+        "4. QUY TẮC VỀ TRUY VẤN BỊ LỖI (khác hẳn với 'không có dữ liệu' ở trên):\n"
+        "   - Nếu một nguồn `sql_X` có kết quả dạng `{\"error\": \"...\"}`, đó là dấu hiệu CÂU TRUY VẤN BỊ LỖI KỸ THUẬT (sai kiểu dữ liệu, tham số không hợp lệ...) "
+        "- KHÔNG ĐƯỢC diễn giải thành 'không có dữ liệu' hay 'chưa ghi nhận số liệu' vì đó là kết luận SAI bản chất (query còn chưa chạy được, không phải chạy ra 0 dòng).\n"
+        "   - Trong trường hợp này, bạn PHẢI báo cho người dùng rằng hệ thống gặp lỗi khi truy vấn dữ liệu cho phần đó, KHÔNG hiển thị nguyên văn mã lỗi kỹ thuật thô, "
+        "và gợi ý người dùng kiểm tra lại thông tin đã cung cấp (ví dụ mã chiến dịch, khoảng thời gian) hoặc thử lại sau.\n"
+        "5. Trả về trực tiếp nội dung văn bản câu trả lời (Markdown), KHÔNG bọc trong JSON."
     ),
 }
 

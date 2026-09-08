@@ -192,8 +192,8 @@ export function App() {
         citations: data.citations || [],
         collected_slots: data.collected_slots || {},
         missing_slots: data.missing_slots || [],
-        suggested_options: data.suggested_options || [],
-        relevant_knowledge: data.relevant_knowledge || [],
+        intent_reasoning: data.intent_reasoning || '',
+        generated_sqls: data.generated_sqls || [],
         generated_sql: data.generated_sql || null,
       };
 

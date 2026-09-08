@@ -163,7 +163,7 @@
   {
     "table_name": "f_adpm_aimkt_campaign_customer_detail",
     "table_alias": null,
-    "description": "Bảng chi tiết danh sách khách hàng mục tiêu và cấu hình chiến dịch Marketing.",
+    "description": "Bảng chi tiết danh sách khách hàng mục tiêu và chương trình gói cước khuyến nghị (KHÔNG chứa thông tin định danh chiến dịch/campaign_id).",
     "columns": [
       {
         "name": "msisdn",
@@ -173,12 +173,12 @@
       {
         "name": "program_code",
         "type": "Nullable(String)",
-        "description": "Mã chương trình / Tên chiến dịch Marketing"
+        "description": "Mã chương trình khuyến nghị (KHÔNG PHẢI mã định danh chiến dịch - không liên quan đến campaign_id)."
       },
       {
         "name": "ten_usecase",
         "type": "Nullable(String)",
-        "description": "Tên usecase hoặc tên chiến dịch thay thế (thường dùng chung với program_code)"
+        "description": "Tên usecase của chương trình khuyến nghị (KHÔNG PHẢI tên/mã chiến dịch - không liên quan đến campaign_id)."
       },
       {
         "name": "vas_name",

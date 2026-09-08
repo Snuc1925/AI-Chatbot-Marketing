@@ -80,19 +80,17 @@ class ClarifyAnalysisResult(BaseModel):
     )
     clarifying_question: str | None = Field(
         default="",
-        description="The exact clarification question to ask the user if needed."
-    )
-    suggested_options: list[str] = Field(
-        default_factory=list,
-        description="Dynamic list of quick reply choices (options 1, 2, 3...) corresponding specifically to the current clarifying question. Do NOT include 'Other/Khác' as UI adds it automatically."
+        description="The exact clarification question to ask the user if needed - a single natural-language question "
+        "covering ALL missing slots at once, not one slot per round. No quick-reply chips are generated anymore; "
+        "the user always types a free-text reply.",
     )
     extracted_entities: dict[str, Any] = Field(
         default_factory=dict,
-        description="Entities/parameters extracted from the user query (e.g., campaign_name, time_range, channel, age_group, etc.)"
+        description="Entities/parameters extracted from the user query (e.g., campaign_id, time_range, channel, age_group, etc.)"
     )
     missing_slots: list[str] = Field(
         default_factory=list,
-        description="List of required parameter names that are still missing (e.g., ['time_range', 'campaign_name'])."
+        description="List of required parameter names that are still missing (e.g., ['time_range', 'campaign_id'])."
     )
     suggested_answer: str | None = Field(
         default="",
@@ -219,8 +217,6 @@ class LLMClient:
                 data["intent_reasoning"] = ""
             if "is_clarification_needed" not in data:
                 data["is_clarification_needed"] = bool(data.get("clarifying_question"))
-            if "suggested_options" not in data:
-                data["suggested_options"] = []
             if "missing_slots" not in data:
                 data["missing_slots"] = []
             if "suggested_answer" not in data or data.get("suggested_answer") is None:

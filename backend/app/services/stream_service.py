@@ -11,7 +11,7 @@ from app.knowledge.knowledge_service import KnowledgeService
 from app.logging_utils import get_client_ip, get_or_create_request_id, get_or_create_session_id
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
-from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
+from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, all_sqls_errored, log_llm_interaction
 from app.services.monitor_service import MonitorService
 from app.sessions.models import ConversationTurn, SessionStatus, format_conversation_history
 from app.sessions.store import BaseSessionStore
@@ -330,7 +330,6 @@ class StreamChatService:
                 "intent_reasoning": analysis.intent_reasoning,
                 "is_clarification_needed": analysis.is_clarification_needed,
                 "clarifying_question": analysis.clarifying_question,
-                "suggested_options": analysis.suggested_options,
                 "extracted_entities": analysis.extracted_entities,
                 "missing_slots": analysis.missing_slots,
                 "generated_sqls": [s.model_dump() for s in analysis.generated_sqls],
@@ -353,7 +352,7 @@ class StreamChatService:
             self.session_store.save(session_state)
 
             bot_msg = analysis.clarifying_question or "Bạn vui lòng cung cấp thêm thông tin để hệ thống hỗ trợ tra cứu."
-            logger.info("  [Response: CLARIFY] Question: '%s' | Options: %s", bot_msg, analysis.suggested_options)
+            logger.info("  [Response: CLARIFY] Question: '%s'", bot_msg)
             final_resp = ChatResponse(
                 session_id=session_id,
                 session_status=session_state.status.value,
@@ -362,7 +361,6 @@ class StreamChatService:
                 intent_reasoning=analysis.intent_reasoning,
                 collected_slots=session_state.collected_slots,
                 missing_slots=session_state.missing_slots,
-                suggested_options=analysis.suggested_options,
                 relevant_knowledge=relevant_knowledge,
                 generated_sql=analysis.generated_sql,
                 generated_sqls=analysis.generated_sqls,
@@ -510,13 +508,16 @@ class StreamChatService:
 
         # Record this completed turn server-side (with the actual SQL/reasoning
         # used) so the NEXT turn's chat_history_text has real grounded context
-        # instead of a dangling <cite id="sql_X"> reference.
+        # instead of a dangling <cite id="sql_X"> reference. If every SQL this
+        # turn failed to execute (e.g. a bad slot value like campaign_id='5G'),
+        # flag it so the next turn doesn't blindly trust these entities as fact.
         session_state.add_turn(
             ConversationTurn(
                 user_query=user_query,
                 extracted_entities=final_slots,
                 generated_sqls=[s.model_dump() for s in analysis.generated_sqls],
                 bot_message=bot_msg,
+                had_sql_errors=all_sqls_errored(citations),
             )
         )
         self.session_store.save(session_state)
@@ -530,7 +531,6 @@ class StreamChatService:
             intent_reasoning=analysis.intent_reasoning,
             collected_slots=final_slots,
             missing_slots=[],
-            suggested_options=[],
             relevant_knowledge=relevant_knowledge,
             generated_sql=analysis.generated_sql,
             generated_sqls=analysis.generated_sqls,

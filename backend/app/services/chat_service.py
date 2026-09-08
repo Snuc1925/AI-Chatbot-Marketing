@@ -13,7 +13,7 @@ from app.logging_utils import get_or_create_request_id
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.monitor_service import MonitorService
-from app.sessions.models import SessionState, SessionStatus
+from app.sessions.models import ConversationTurn, SessionState, SessionStatus, format_conversation_history
 from app.sessions.store import BaseSessionStore
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,13 @@ class ChatRequest(BaseModel):
     query: str
     session_id: str | None = None
     reset_session: bool = False
-    chat_history: list[dict[str, str]] = Field(default_factory=list)
+    chat_history: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="DEPRECATED - kept for backward compatibility with older clients but no longer used to build "
+        "LLM context. The server now maintains its own conversation_history per session_id (see "
+        "app/sessions/models.py), which is grounded with the actual SQL/reasoning used - not just the "
+        "rendered <cite id=...> text a client could (accidentally or not) send back incomplete or altered.",
+    )
     top_k: int = 3
     similarity_threshold: float = 0.60
 
@@ -119,7 +125,6 @@ class ChatService:
         logger.info("================================================================================")
         logger.info("[REQUEST START] ID: %s | Session: %s", request_id, session_id)
         logger.info("  User Query: '%s'", user_query)
-        logger.info("  Chat History: %d messages", len(request.chat_history))
 
         if self.monitor_service:
             self.monitor_service.start_trace(request_id, session_id, user_query)
@@ -131,7 +136,15 @@ class ChatService:
         if request.reset_session:
             logger.info("  Resetting session state as requested.")
             session_state.reset_to_idle()
+            session_state.clear_history()
             self.session_store.save(session_state)
+
+        # Server-managed conversation history (see app/sessions/models.py) is the
+        # source of truth for follow-up context - NOT request.chat_history, which
+        # is client-supplied and only ever contained the rendered <cite id="sql_X">
+        # markdown with no SQL behind it, and can't be trusted anyway.
+        chat_history_text = format_conversation_history(session_state.conversation_history)
+        logger.info("  Server-side Conversation History: %d turn(s)", len(session_state.conversation_history))
 
         is_follow_up = session_state.status == SessionStatus.WAITING_CLARIFY
         existing_slots = session_state.collected_slots if is_follow_up else {}
@@ -213,7 +226,7 @@ class ChatService:
                 business_knowledge=relevant_knowledge,
                 sql_examples=relevant_sql_examples,
                 schema_context=schema_context,
-                chat_history=request.chat_history,
+                chat_history_text=chat_history_text,
                 is_follow_up=is_follow_up,
             )
             llm_time_ms = round((time.perf_counter() - t_llm) * 1000, 2)
@@ -291,7 +304,6 @@ class ChatService:
         # 6. Information is complete -> Execute SQL & synthesize answer
         final_slots = dict(analysis.extracted_entities)
         session_state.reset_to_idle()
-        self.session_store.save(session_state)
 
         bot_msg, citations = self._execute_sqls_and_synthesize(
             user_query=user_query,
@@ -301,6 +313,19 @@ class ChatService:
             default_answer=analysis.suggested_answer or "Đã ghi nhận yêu cầu của bạn.",
             request_id=request_id,
         )
+
+        # Record this completed turn server-side (with the actual SQL/reasoning
+        # used) so the NEXT turn's chat_history_text has real grounded context
+        # instead of a dangling <cite id="sql_X"> reference.
+        session_state.add_turn(
+            ConversationTurn(
+                user_query=user_query,
+                extracted_entities=final_slots,
+                generated_sqls=[s.model_dump() for s in analysis.generated_sqls],
+                bot_message=bot_msg,
+            )
+        )
+        self.session_store.save(session_state)
 
         final_resp = ChatResponse(
             session_id=session_id,

@@ -14,7 +14,7 @@ from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
 from app.services.monitor_service import MonitorService
-from app.sessions.models import SessionStatus
+from app.sessions.models import ConversationTurn, SessionStatus, format_conversation_history
 from app.sessions.store import BaseSessionStore
 
 logger = logging.getLogger(__name__)
@@ -98,10 +98,14 @@ class StreamChatService:
         if request.reset_session:
             logger.info("  Resetting session state as requested.")
             session_state.reset_to_idle()
+            session_state.clear_history()
             self.session_store.save(session_state)
 
         is_follow_up = session_state.status == SessionStatus.WAITING_CLARIFY
         existing_slots = session_state.collected_slots if is_follow_up else {}
+        # Server-managed conversation history is the source of truth for
+        # follow-up context - see app/sessions/models.py and chat_service.py.
+        chat_history_text = format_conversation_history(session_state.conversation_history)
         session_load_ms = round((time.perf_counter() - t_step) * 1000, 2)
         logger.info("  [Step 1: Session] Status=%s | is_follow_up=%s | existing_slots=%s (%sms)", session_state.status.value, is_follow_up, existing_slots, session_load_ms)
         step_session_data = {
@@ -263,7 +267,7 @@ class StreamChatService:
                 business_knowledge=relevant_knowledge,
                 sql_examples=relevant_sql_examples,
                 schema_context=schema_context,
-                chat_history=request.chat_history,
+                chat_history_text=chat_history_text,
                 is_follow_up=is_follow_up,
             )
         except Exception as e:
@@ -386,7 +390,6 @@ class StreamChatService:
         # 6. Step: Execute Multi-SQL on ClickHouse
         final_slots = dict(analysis.extracted_entities)
         session_state.reset_to_idle()
-        self.session_store.save(session_state)
 
         citations: list[CitationItem] = []
         sql_query_results: list[dict[str, Any]] = []
@@ -503,6 +506,19 @@ class StreamChatService:
         if self.monitor_service:
             self.monitor_service.record_step(request_id, step_synth_data)
         yield sse_event("step_done", step_synth_data)
+
+        # Record this completed turn server-side (with the actual SQL/reasoning
+        # used) so the NEXT turn's chat_history_text has real grounded context
+        # instead of a dangling <cite id="sql_X"> reference.
+        session_state.add_turn(
+            ConversationTurn(
+                user_query=user_query,
+                extracted_entities=final_slots,
+                generated_sqls=[s.model_dump() for s in analysis.generated_sqls],
+                bot_message=bot_msg,
+            )
+        )
+        self.session_store.save(session_state)
 
         # 8. Final Response Event
         final_resp = ChatResponse(

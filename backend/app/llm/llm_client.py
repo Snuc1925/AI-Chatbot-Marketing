@@ -143,7 +143,7 @@ class LLMClient:
         business_knowledge: list[str] | None = None,
         sql_examples: list[dict[str, Any]] | None = None,
         schema_context: str | None = None,
-        chat_history: list[dict[str, str]] | None = None,
+        chat_history_text: str | None = None,
         is_follow_up: bool = False,
     ) -> ClarifyAnalysisResult:
         """
@@ -174,11 +174,8 @@ class LLMClient:
         if schema_context:
             user_content += f"--- CẤU TRÚC BẢNG DỮ LIỆU CLICKHOUSE (SCHEMA CONTEXT) ---\n{schema_context}\n\n"
 
-        if chat_history:
-            history_text = "\n".join(
-                f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in chat_history[-4:]
-            )
-            user_content += f"\n--- LỊCH SỬ CHAT ---\n{history_text}\n"
+        if chat_history_text:
+            user_content += f"\n--- LỊCH SỬ CHAT (kèm SQL/reasoning đã dùng ở các lượt trước) ---\n{chat_history_text}\n"
 
         input_messages = [
             {"role": "system", "content": system_prompt},

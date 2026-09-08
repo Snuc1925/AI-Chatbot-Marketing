@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from typing import Any
 from pydantic import BaseModel, Field
 
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
-from app.logging_utils import get_or_create_request_id
+from app.logging_utils import get_client_ip, get_or_create_request_id, get_or_create_session_id
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.monitor_service import MonitorService
@@ -117,17 +116,20 @@ class ChatService:
     def process_chat(self, request: ChatRequest) -> ChatResponse:
         t_start = time.perf_counter()
         user_query = request.query.strip()
-        session_id = request.session_id or str(uuid.uuid4())
+        # Reuses the session_id the endpoint already resolved/set into context
+        # (see app/logging_utils.py) so logs/traces group under the same folder.
+        session_id = get_or_create_session_id(request.session_id)
         # Reuses the request_id already assigned by the endpoint (see app/logging_utils.py)
         # so this request's logs land in the same per-request log file.
         request_id = get_or_create_request_id()
+        client_ip = get_client_ip()
 
         logger.info("================================================================================")
-        logger.info("[REQUEST START] ID: %s | Session: %s", request_id, session_id)
+        logger.info("[REQUEST START] ID: %s | Session: %s | Client IP: %s", request_id, session_id, client_ip)
         logger.info("  User Query: '%s'", user_query)
 
         if self.monitor_service:
-            self.monitor_service.start_trace(request_id, session_id, user_query)
+            self.monitor_service.start_trace(request_id, session_id, user_query, client_ip=client_ip)
 
         # 1. Fetch Session State from Redis
         session_state = self.session_store.get(session_id)

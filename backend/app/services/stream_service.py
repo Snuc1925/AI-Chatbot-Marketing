@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
 from typing import Any, AsyncGenerator
 
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
-from app.logging_utils import get_or_create_request_id
+from app.logging_utils import get_client_ip, get_or_create_request_id, get_or_create_session_id
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
@@ -60,18 +59,20 @@ class StreamChatService:
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         t_request_start = time.perf_counter()
         user_query = request.query.strip()
-        session_id = request.session_id or str(uuid.uuid4())
+        # Reuses the session_id the endpoint already resolved/set into context
+        # (see app/logging_utils.py) so logs/traces group under the same folder.
+        session_id = get_or_create_session_id(request.session_id)
         # Reuses the request_id already assigned by the endpoint (see app/logging_utils.py)
         # so this request's logs land in the same per-request log file.
         request_id = get_or_create_request_id()
+        client_ip = get_client_ip()
 
         logger.info("================================================================================")
-        logger.info("[STREAM REQUEST START] ID: %s | Session: %s", request_id, session_id)
+        logger.info("[STREAM REQUEST START] ID: %s | Session: %s | Client IP: %s", request_id, session_id, client_ip)
         logger.info("  User Query: '%s'", user_query)
-        logger.info("  Chat History: %d messages", len(request.chat_history))
 
         if self.monitor_service:
-            self.monitor_service.start_trace(request_id, session_id, user_query)
+            self.monitor_service.start_trace(request_id, session_id, user_query, client_ip=client_ip)
 
         total_prompt_tokens = 0
         total_completion_tokens = 0

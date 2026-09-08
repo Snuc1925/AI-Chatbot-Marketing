@@ -4,17 +4,21 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, AsyncGenerator
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+_SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]")
+
 
 class RequestTrace(BaseModel):
     request_id: str
     session_id: str
     query: str
+    client_ip: str = "unknown"
     timestamp: float = Field(default_factory=time.time)
     status: str = "running"  # "running", "completed", "error"
     total_latency_ms: float = 0.0
@@ -31,9 +35,9 @@ class RequestTrace(BaseModel):
 class MonitorService:
     """
     In-memory execution monitor service that also persists each finished trace to
-    disk (one JSON file per request_id under `traces_dir`), and reloads the most
-    recent ones on startup - so the Monitor's chat/execution history survives a
-    backend restart instead of being wiped every time.
+    disk, grouped by session - <traces_dir>/<session_id>/<request_id>.json - and
+    reloads the most recent ones on startup - so the Monitor's chat/execution
+    history survives a backend restart instead of being wiped every time.
     Maintains the list of recent query traces and broadcasts realtime events to admin subscribers.
     """
 
@@ -47,52 +51,57 @@ class MonitorService:
             os.makedirs(self.traces_dir, exist_ok=True)
             self._load_persisted_traces()
 
-    def _trace_file_path(self, request_id: str) -> str | None:
+    def _trace_file_path(self, session_id: str, request_id: str) -> str | None:
         if not self.traces_dir:
             return None
-        return os.path.join(self.traces_dir, f"{request_id}.json")
+        safe_sid = _SAFE_NAME_RE.sub("_", session_id or "no-session")
+        safe_rid = _SAFE_NAME_RE.sub("_", request_id)
+        return os.path.join(self.traces_dir, safe_sid, f"{safe_rid}.json")
 
     def _load_persisted_traces(self) -> None:
-        """Restores the most recent finished traces from disk on startup."""
-        try:
-            files = [f for f in os.listdir(self.traces_dir) if f.endswith(".json")]
-        except Exception as e:
-            logger.warning("Failed to list persisted traces in %s: %s", self.traces_dir, e)
-            return
+        """Restores the most recent finished traces from disk on startup (walks
+        the <traces_dir>/<session_id>/ subfolders)."""
+        found: list[str] = []
+        for root, _dirs, files in os.walk(self.traces_dir):
+            for fname in files:
+                if fname.endswith(".json"):
+                    found.append(os.path.join(root, fname))
 
         # Newest first, by file mtime (a proxy for finish_trace() write time)
-        files.sort(key=lambda f: os.path.getmtime(os.path.join(self.traces_dir, f)), reverse=True)
+        found.sort(key=os.path.getmtime, reverse=True)
 
         loaded = 0
-        for fname in files[: self.max_traces]:
+        for full_path in found[: self.max_traces]:
             try:
-                with open(os.path.join(self.traces_dir, fname), "r", encoding="utf-8") as f:
+                with open(full_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 trace = RequestTrace(**data)
                 self._traces[trace.request_id] = trace
                 self._ordered_ids.append(trace.request_id)
                 loaded += 1
             except Exception as e:
-                logger.warning("Failed to load persisted trace %s: %s", fname, e)
+                logger.warning("Failed to load persisted trace %s: %s", full_path, e)
 
         if loaded:
             logger.info("Restored %d persisted trace(s) from %s", loaded, self.traces_dir)
 
     def _persist_trace(self, trace: RequestTrace) -> None:
-        path = self._trace_file_path(trace.request_id)
+        path = self._trace_file_path(trace.session_id, trace.request_id)
         if not path:
             return
         try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(trace.model_dump(), f, ensure_ascii=False, default=str)
         except Exception as e:
             logger.warning("Failed to persist trace %s: %s", trace.request_id, e)
 
-    def start_trace(self, request_id: str, session_id: str, query: str) -> RequestTrace:
+    def start_trace(self, request_id: str, session_id: str, query: str, client_ip: str = "unknown") -> RequestTrace:
         trace = RequestTrace(
             request_id=request_id,
             session_id=session_id,
             query=query,
+            client_ip=client_ip,
             timestamp=time.time(),
             status="running",
         )
@@ -107,6 +116,7 @@ class MonitorService:
             "request_id": request_id,
             "session_id": session_id,
             "query": query,
+            "client_ip": client_ip,
             "timestamp": trace.timestamp,
         })
         return trace
@@ -179,6 +189,7 @@ class MonitorService:
                     "request_id": trace.request_id,
                     "session_id": trace.session_id,
                     "query": trace.query,
+                    "client_ip": trace.client_ip,
                     "timestamp": trace.timestamp,
                     "status": trace.status,
                     "total_latency_ms": trace.total_latency_ms,

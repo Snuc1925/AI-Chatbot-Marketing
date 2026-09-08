@@ -222,7 +222,60 @@ body {
   padding: 10px;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.session-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+  transition: background 0.15s ease;
+}
+
+.session-group-header:hover {
+  background: #e2e8f0;
+}
+
+.session-id-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.session-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.session-latest-time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.session-traces-sublist {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  padding: 8px 0 4px 14px;
+  border-left: 2px solid var(--border);
+  margin-left: 10px;
 }
 
 .trace-item-card {

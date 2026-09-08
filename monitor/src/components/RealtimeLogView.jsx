@@ -1,23 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Activity, 
-  Search, 
-  RefreshCw, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Coins, 
-  Database, 
-  Cpu, 
-  BookOpen, 
-  Code2, 
-  Terminal, 
-  ChevronRight, 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Activity,
+  Search,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Coins,
+  Database,
+  Cpu,
+  BookOpen,
+  Code2,
+  Terminal,
+  ChevronRight,
+  ChevronDown,
   PlayCircle,
   Copy,
   Check,
   Zap,
-  Layers
+  Layers,
+  MessagesSquare
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -30,6 +32,8 @@ export function RealtimeLogView() {
   const [activeTab, setActiveTab] = useState('llm'); // 'timeline' | 'llm' | 'sql' | 'knowledge' | 'raw'
   const [copiedKey, setCopiedKey] = useState(null);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [expandedSessions, setExpandedSessions] = useState(() => new Set());
+  const hasAutoExpandedRef = useRef(false);
 
   const eventSourceRef = useRef(null);
 
@@ -120,8 +124,51 @@ export function RealtimeLogView() {
   const filteredTraces = traces.filter((t) =>
     t.query?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.request_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.session_id?.toLowerCase().includes(searchQuery.toLowerCase())
+    t.session_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.client_ip?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Group traces by session_id - each session is a collapsible group, newest
+  // session first (traces already arrive newest-first from the API, so the
+  // first trace seen for a session is also that session's most recent activity).
+  const sessionGroups = useMemo(() => {
+    const groups = new Map();
+    for (const t of filteredTraces) {
+      const sid = t.session_id || 'unknown';
+      if (!groups.has(sid)) {
+        groups.set(sid, { session_id: sid, latestTimestamp: t.timestamp || 0, clientIp: t.client_ip, traces: [] });
+      }
+      const g = groups.get(sid);
+      g.traces.push(t);
+      if ((t.timestamp || 0) > g.latestTimestamp) g.latestTimestamp = t.timestamp;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.latestTimestamp - a.latestTimestamp);
+  }, [filteredTraces]);
+
+  // Auto-expand the most recent session on first load, and whichever session
+  // owns the currently selected trace (e.g. after clicking one from an SSE update).
+  useEffect(() => {
+    if (sessionGroups.length === 0) return;
+    setExpandedSessions((prev) => {
+      const next = new Set(prev);
+      if (!hasAutoExpandedRef.current) {
+        next.add(sessionGroups[0].session_id);
+        hasAutoExpandedRef.current = true;
+      }
+      const owner = sessionGroups.find((g) => g.traces.some((t) => t.request_id === selectedRequestId));
+      if (owner) next.add(owner.session_id);
+      return next;
+    });
+  }, [sessionGroups, selectedRequestId]);
+
+  const toggleSession = (sid) => {
+    setExpandedSessions((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      return next;
+    });
+  };
 
   return (
     <div className="monitor-split-container">
@@ -157,69 +204,98 @@ export function RealtimeLogView() {
           </div>
         </div>
 
-        {/* Traces List */}
+        {/* Sessions List (each session is a collapsible group of its request traces) */}
         <div className="traces-list-scroll">
-          {filteredTraces.length === 0 ? (
+          {sessionGroups.length === 0 ? (
             <div className="empty-traces">
               <Activity size={32} color="var(--text-light)" />
               <p>Chưa có lượt truy vấn nào được ghi nhận.</p>
             </div>
           ) : (
-            filteredTraces.map((trace) => {
-              const isSelected = trace.request_id === selectedRequestId;
-              const isRunning = trace.status === 'running';
-              const isError = trace.status === 'error';
-              const timeFormatted = trace.timestamp
-                ? new Date(trace.timestamp * 1000).toLocaleTimeString('vi-VN')
+            sessionGroups.map((group) => {
+              const isExpanded = expandedSessions.has(group.session_id);
+              const latestFormatted = group.latestTimestamp
+                ? new Date(group.latestTimestamp * 1000).toLocaleTimeString('vi-VN')
                 : 'N/A';
+              const hasRunning = group.traces.some((t) => t.status === 'running');
+              const hasError = group.traces.some((t) => t.status === 'error');
 
               return (
-                <div
-                  key={trace.request_id}
-                  className={`trace-item-card ${isSelected ? 'selected' : ''}`}
-                  onClick={() => setSelectedRequestId(trace.request_id)}
-                >
-                  <div className="trace-card-top">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {isRunning ? (
-                        <span className="status-badge running animate-pulse">
-                          <RefreshCw size={11} className="animate-spin" /> RUNNING
-                        </span>
-                      ) : isError ? (
-                        <span className="status-badge error">
-                          <AlertCircle size={11} /> ERROR
-                        </span>
-                      ) : (
-                        <span className="status-badge done">
-                          <CheckCircle2 size={11} /> DONE
-                        </span>
-                      )}
-                      <span className="trace-time">{timeFormatted}</span>
+                <div key={group.session_id} className="session-group">
+                  <div className="session-group-header" onClick={() => toggleSession(group.session_id)}>
+                    {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    <MessagesSquare size={14} color="var(--primary)" />
+                    <span className="session-id-tag" title={group.session_id}>
+                      {group.session_id.slice(0, 8)}
+                    </span>
+                    <span className="session-count-badge">{group.traces.length} request{group.traces.length > 1 ? 's' : ''}</span>
+                    {hasRunning && <span className="status-badge running animate-pulse"><RefreshCw size={10} className="animate-spin" /></span>}
+                    {hasError && !hasRunning && <span className="status-badge error"><AlertCircle size={10} /></span>}
+                    <span className="session-latest-time">{latestFormatted}</span>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="session-traces-sublist">
+                      {group.traces.map((trace) => {
+                        const isSelected = trace.request_id === selectedRequestId;
+                        const isRunning = trace.status === 'running';
+                        const isError = trace.status === 'error';
+                        const timeFormatted = trace.timestamp
+                          ? new Date(trace.timestamp * 1000).toLocaleTimeString('vi-VN')
+                          : 'N/A';
+
+                        return (
+                          <div
+                            key={trace.request_id}
+                            className={`trace-item-card ${isSelected ? 'selected' : ''}`}
+                            onClick={() => setSelectedRequestId(trace.request_id)}
+                          >
+                            <div className="trace-card-top">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {isRunning ? (
+                                  <span className="status-badge running animate-pulse">
+                                    <RefreshCw size={11} className="animate-spin" /> RUNNING
+                                  </span>
+                                ) : isError ? (
+                                  <span className="status-badge error">
+                                    <AlertCircle size={11} /> ERROR
+                                  </span>
+                                ) : (
+                                  <span className="status-badge done">
+                                    <CheckCircle2 size={11} /> DONE
+                                  </span>
+                                )}
+                                <span className="trace-time">{timeFormatted}</span>
+                              </div>
+
+                              <div className="trace-metrics-compact">
+                                <span title="Total Tokens">
+                                  <Coins size={11} /> {trace.total_tokens?.toLocaleString() || 0}
+                                </span>
+                                <span title="Latency">
+                                  <Clock size={11} /> {trace.total_latency_ms ? `${trace.total_latency_ms}ms` : '...'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="trace-query-snippet">
+                              {trace.query || '(Empty query)'}
+                            </div>
+
+                            <div className="trace-meta-footer">
+                              <span>ID: <code>{trace.request_id.slice(-8)}</code></span>
+                              <span>IP: <code>{trace.client_ip || 'unknown'}</code></span>
+                              {trace.sql_count > 0 && (
+                                <span className="sql-count-tag">
+                                  <Database size={10} /> {trace.sql_count} SQL
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    <div className="trace-metrics-compact">
-                      <span title="Total Tokens">
-                        <Coins size={11} /> {trace.total_tokens?.toLocaleString() || 0}
-                      </span>
-                      <span title="Latency">
-                        <Clock size={11} /> {trace.total_latency_ms ? `${trace.total_latency_ms}ms` : '...'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="trace-query-snippet">
-                    {trace.query || '(Empty query)'}
-                  </div>
-
-                  <div className="trace-meta-footer">
-                    <span>ID: <code>{trace.request_id.slice(-8)}</code></span>
-                    <span>Sess: <code>{trace.session_id ? trace.session_id.slice(0, 6) : 'N/A'}</code></span>
-                    {trace.sql_count > 0 && (
-                      <span className="sql-count-tag">
-                        <Database size={10} /> {trace.sql_count} SQL
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })
@@ -240,7 +316,7 @@ export function RealtimeLogView() {
                       {selectedTraceDetail.status.toUpperCase()}
                     </span>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      Request ID: <code>{selectedTraceDetail.request_id}</code> | Session ID: <code>{selectedTraceDetail.session_id}</code>
+                      Request ID: <code>{selectedTraceDetail.request_id}</code> | Session ID: <code>{selectedTraceDetail.session_id}</code> | Client IP: <code>{selectedTraceDetail.client_ip || 'unknown'}</code>
                     </span>
                   </div>
                   <h2 className="trace-query-full">"{selectedTraceDetail.query}"</h2>

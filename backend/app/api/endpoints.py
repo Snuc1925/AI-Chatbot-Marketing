@@ -17,12 +17,27 @@ from app.knowledge.sql_examples_manage_service import (
     SqlExampleCreate,
     SqlExampleUpdate,
 )
-from app.logging_utils import get_or_create_request_id
+from app.logging_utils import client_ip_var, get_or_create_request_id, get_or_create_session_id
 from app.services.chat_service import ChatRequest, ChatResponse
 from app.sessions.models import SessionState
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _extract_client_ip(request: Request) -> str:
+    """
+    Resolves the real client IP. Prefers X-Forwarded-For / X-Real-IP (set by a
+    reverse proxy such as nginx in front of the VPS deployment) over
+    request.client.host, which would otherwise just be the proxy's own IP.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    xri = request.headers.get("x-real-ip")
+    if xri:
+        return xri.strip()
+    return request.client.host if request.client else "unknown"
 
 
 class SyncKnowledgeRequest(BaseModel):
@@ -45,9 +60,13 @@ class SchemaDescriptionsUpdate(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request_body: ChatRequest, request: Request) -> ChatResponse:
     services = request.app.state.services
-    # Assign this request's ID up-front so every log line from here down - this
-    # endpoint, chat_service, llm_client - lands in the same per-request log file.
+    # Assign this request's ID, session ID and client IP up-front so every log
+    # line from here down - this endpoint, chat_service, llm_client - lands in
+    # the same per-session/per-request log file (logs/requests/<session_id>/<request_id>.log)
+    # and carries the IP that made the request.
     get_or_create_request_id()
+    request_body.session_id = get_or_create_session_id(request_body.session_id)
+    client_ip_var.set(_extract_client_ip(request))
     logger.info(">>> [POST /api/chat] Received request | query='%s' | session_id=%s", request_body.query, request_body.session_id)
     try:
         response = services.chat_service.process_chat(request_body)
@@ -66,6 +85,8 @@ async def chat_stream_endpoint(request_body: ChatRequest, request: Request):
     """
     services = request.app.state.services
     get_or_create_request_id()
+    request_body.session_id = get_or_create_session_id(request_body.session_id)
+    client_ip_var.set(_extract_client_ip(request))
     logger.info(">>> [POST /api/chat/stream] SSE stream started | query='%s' | session_id=%s", request_body.query, request_body.session_id)
     generator = services.stream_chat_service.stream_chat(request_body)
     return StreamingResponse(

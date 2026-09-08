@@ -15,6 +15,16 @@ import uuid
 # instead of everything piling up into one shared chat_pipeline.log.
 request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
+# Holds the current request's session ID, resolved once up-front in
+# endpoints.py (generating a new one if the client didn't send one) - so
+# per-request logs/traces can be grouped by session: logs/requests/<session_id>/<request_id>.log
+session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_id", default=None)
+
+# Holds the current request's client IP (set alongside request_id in
+# endpoints.py) so it can be logged into the per-request log file and attached
+# to the Monitor trace, without threading it through every function signature.
+client_ip_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("client_ip", default=None)
+
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
@@ -31,12 +41,36 @@ def get_or_create_request_id() -> str:
     return rid
 
 
+def get_or_create_session_id(explicit: str | None = None) -> str:
+    """
+    Resolves the session_id for the current request context: uses `explicit` if
+    given (e.g. the client sent one), otherwise reuses whatever is already set
+    in this context, otherwise creates a new one. Idempotent - safe to call from
+    both the endpoint (first) and chat_service/stream_service (which reuse the
+    same value the endpoint already resolved).
+    """
+    if explicit:
+        session_id_var.set(explicit)
+        return explicit
+    sid = session_id_var.get()
+    if not sid:
+        sid = str(uuid.uuid4())
+        session_id_var.set(sid)
+    return sid
+
+
+def get_client_ip() -> str:
+    """Returns the client IP set for the current request context, or 'unknown' if none was set."""
+    return client_ip_var.get() or "unknown"
+
+
 class PerRequestFileHandler(logging.Handler):
     """
-    Writes each request's pipeline log lines to its own file under `logs_dir`,
-    named after the current request_id (see request_id_var) - instead of every
-    request's logs piling up together into one shared file, which made debugging
-    a single request painful.
+    Writes each request's pipeline log lines to its own file, grouped by
+    session, under `logs_dir`: <logs_dir>/<session_id>/<request_id>.log -
+    instead of every request's logs piling up together into one shared file
+    (or previously, a flat file per request with no session grouping), which
+    made following one conversation across multiple turns painful.
 
     Log records emitted outside of a request context (no request_id set) are
     dropped by this handler; they still go to stdout via the root logger as usual.
@@ -52,11 +86,14 @@ class PerRequestFileHandler(logging.Handler):
         rid = request_id_var.get()
         if not rid:
             return
-        safe_name = _SAFE_NAME_RE.sub("_", rid)
-        path = os.path.join(self.logs_dir, f"{safe_name}.log")
+        safe_rid = _SAFE_NAME_RE.sub("_", rid)
+        safe_sid = _SAFE_NAME_RE.sub("_", session_id_var.get() or "no-session")
+        dir_path = os.path.join(self.logs_dir, safe_sid)
+        path = os.path.join(dir_path, f"{safe_rid}.log")
         try:
             msg = self.format(record)
             with self._lock:
+                os.makedirs(dir_path, exist_ok=True)
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(msg + "\n")
         except Exception:

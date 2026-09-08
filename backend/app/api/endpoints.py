@@ -37,6 +37,11 @@ class SystemPromptUpdate(BaseModel):
     content: str
 
 
+class SchemaDescriptionsUpdate(BaseModel):
+    table_description: str | None = None
+    column_descriptions: dict[str, str] = {}
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request_body: ChatRequest, request: Request) -> ChatResponse:
     services = request.app.state.services
@@ -313,6 +318,29 @@ async def get_schema_table(table_name: str, request: Request) -> dict[str, Any]:
     if not table_meta:
         raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found in metadata.")
     return table_meta
+
+
+@router.put("/schema/tables/{table_name}/descriptions")
+async def update_schema_descriptions(table_name: str, payload: SchemaDescriptionsUpdate, request: Request) -> dict[str, Any]:
+    """
+    Updates only the free-text description of a table and/or its columns.
+    Table/column names and column types stay fixed - they mirror the real
+    ClickHouse DDL in backend/sql/init.sql and are not editable via this endpoint.
+    """
+    services = request.app.state.services
+    try:
+        return services.schema_manage_service.update_descriptions(
+            table_name,
+            table_description=payload.table_description,
+            column_descriptions=payload.column_descriptions,
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error updating schema descriptions for '%s': %s", table_name, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/schema/tables")

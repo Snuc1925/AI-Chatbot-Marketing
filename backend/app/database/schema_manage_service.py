@@ -69,6 +69,41 @@ class SchemaManageService:
             "table": table_meta.model_dump(),
         }
 
+    def update_descriptions(
+        self,
+        table_name: str,
+        table_description: str | None = None,
+        column_descriptions: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Updates only the free-text `description` of a table and/or its columns.
+        Table name, column names and column types are intentionally NOT editable
+        here - those are tied 1:1 to the real ClickHouse DDL in backend/sql/init.sql,
+        while descriptions are pure prompt-context metadata that is safe to edit
+        without any risk of drifting from the actual database structure.
+        """
+        table = self.schema_manager.get_table(table_name)
+        if not table:
+            raise KeyError(f"Không tìm thấy bảng '{table_name}' trong schema metadata.")
+
+        if table_description is not None:
+            table.description = table_description.strip()
+
+        if column_descriptions:
+            column_by_name = {c.name: c for c in table.columns}
+            unknown = [name for name in column_descriptions if name not in column_by_name]
+            if unknown:
+                raise ValueError(f"Cột không tồn tại trong bảng '{table_name}': {', '.join(unknown)}")
+            for col_name, desc in column_descriptions.items():
+                column_by_name[col_name].description = desc.strip()
+
+        self._save_to_file()
+        return {
+            "status": "success",
+            "message": f"Đã cập nhật mô tả cho bảng '{table_name}'.",
+            "table": table.model_dump(),
+        }
+
     def delete_table(self, table_name: str) -> dict[str, Any]:
         """Deletes a table from schema metadata and saves to file."""
         if table_name not in self.schema_manager._schemas:

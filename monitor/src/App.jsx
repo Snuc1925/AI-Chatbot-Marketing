@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RealtimeLogView } from './components/RealtimeLogView';
 import { KnowledgeManagerView } from './components/KnowledgeManagerView';
-import { SchemaViewerView } from './components/SchemaViewerView';
+import { SchemaManagerView } from './components/SchemaManagerView';
 import { SystemPromptsView } from './components/SystemPromptsView';
 // HIDDEN (not deleted): SQL Examples tab is intentionally disabled - its content
 // now overlaps with Business Knowledge. Re-enable by uncommenting this import and
@@ -44,7 +44,7 @@ export default function App() {
               onClick={() => setActiveMainTab('schema')}
             >
               <Database size={16} />
-              <span>Schema ClickHouse (view-only)</span>
+              <span>Schema ClickHouse</span>
             </button>
 
             <button
@@ -86,7 +86,7 @@ export default function App() {
       <main className="admin-content-area">
         {activeMainTab === 'monitor' && <RealtimeLogView />}
         {activeMainTab === 'knowledge' && <KnowledgeManagerView />}
-        {activeMainTab === 'schema' && <SchemaViewerView />}
+        {activeMainTab === 'schema' && <SchemaManagerView />}
         {activeMainTab === 'prompts' && <SystemPromptsView />}
         {/* {activeMainTab === 'sql_examples' && <SqlExamplesManagerView />} */}
       </main>

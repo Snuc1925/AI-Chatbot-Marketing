@@ -1,6 +1,7 @@
 [
   {
     "table_name": "f023_mpre_vas_manh",
+    "table_alias": null,
     "description": "Bảng log mua và đăng ký gói cước VAS của thuê bao.",
     "columns": [
       {
@@ -67,6 +68,7 @@
   },
   {
     "table_name": "webservice_log_v2_manh",
+    "table_alias": null,
     "description": "Bảng ghi log truyền thông các kênh webservice (MyViettel, Callbot).",
     "columns": [
       {
@@ -118,6 +120,7 @@
   },
   {
     "table_name": "sms_log_v2",
+    "table_alias": null,
     "description": "Bảng ghi log truyền thông kênh tin nhắn SMS.",
     "columns": [
       {
@@ -159,6 +162,7 @@
   },
   {
     "table_name": "f_adpm_aimkt_campaign_customer_detail",
+    "table_alias": null,
     "description": "Bảng chi tiết danh sách khách hàng mục tiêu và cấu hình chiến dịch Marketing.",
     "columns": [
       {

@@ -15,6 +15,7 @@ from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient
 from app.llm.prompt_service import PromptManageService
 from app.llm.tools.schema_tool import SchemaAgentTool
+from app.paths import get_logs_dir
 from app.services.chat_service import ChatService
 from app.services.monitor_service import MonitorService
 from app.services.stream_service import StreamChatService
@@ -147,8 +148,9 @@ class ApplicationServices:
             sql_examples_file_path=settings.sql_examples_file_path,
         )
 
-        # 8. Monitor Service
-        monitor_service = MonitorService(max_traces=100)
+        # 8. Monitor Service (persists finished traces to disk so the Monitor's
+        # chat/execution history survives a backend restart)
+        monitor_service = MonitorService(max_traces=100, traces_dir=get_logs_dir("traces"))
 
         # 9. Chat service & Stream Chat Service
         chat_service = ChatService(

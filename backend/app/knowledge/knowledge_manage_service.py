@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.knowledge.knowledge_service import KnowledgeService
+from app.paths import resolve_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +38,7 @@ class KnowledgeManageService:
         self.knowledge_file_path = knowledge_file_path
 
     def _resolve_file_path(self) -> Path:
-        file_path = Path(self.knowledge_file_path)
-        if not file_path.exists():
-            alt_paths = [
-                Path("business_knowledge.json"),
-                Path("backend/business_knowledge.json"),
-                Path(__file__).resolve().parent.parent.parent / "business_knowledge.json",
-            ]
-            for p in alt_paths:
-                if p.exists():
-                    return p
-        return file_path
+        return Path(resolve_data_path(self.knowledge_file_path))
 
     def list_rules(self) -> list[KnowledgeRuleItem]:
         """Reads and returns all business rules from business_knowledge.json."""

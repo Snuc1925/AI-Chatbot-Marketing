@@ -9,6 +9,7 @@ services:
         HTTPS_PROXY: ${APP_HTTPS_PROXY-}
         NO_PROXY: ${APP_NO_PROXY-}
     command: ["npm", "run", "dev"]
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
@@ -27,6 +28,7 @@ services:
         HTTPS_PROXY: ${APP_HTTPS_PROXY-}
         NO_PROXY: ${APP_NO_PROXY-}
     command: ["npm", "run", "dev"]
+    restart: unless-stopped
     ports:
       - "3001:3001"
     volumes:
@@ -46,11 +48,14 @@ services:
         HTTPS_PROXY: ${APP_HTTPS_PROXY-}
         NO_PROXY: ${APP_NO_PROXY-}
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app/backend
+      - ${HOST_DATA_DIR-./data}:/data
     environment:
+      - DATA_DIR=/data
       - HTTP_PROXY=${APP_HTTP_PROXY-}
       - HTTPS_PROXY=${APP_HTTPS_PROXY-}
       - NO_PROXY=${APP_NO_PROXY-}

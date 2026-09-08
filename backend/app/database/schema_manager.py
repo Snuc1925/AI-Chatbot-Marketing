@@ -5,6 +5,7 @@ import logging
 import os
 from typing import Any
 from pydantic import BaseModel, Field
+from app.paths import resolve_data_path
 from app.vectorstores.base import BaseVectorStore
 
 logger = logging.getLogger(__name__)
@@ -41,13 +42,7 @@ class SchemaManager:
         """
         Loads table metadata, column descriptions, and join hints from schemas.json.
         """
-        if not os.path.isabs(self.schema_file_path):
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            full_path = os.path.join(base_dir, self.schema_file_path)
-            if not os.path.exists(full_path):
-                full_path = self.schema_file_path
-        else:
-            full_path = self.schema_file_path
+        full_path = resolve_data_path(self.schema_file_path)
 
         if not os.path.exists(full_path):
             logger.warning("Schema metadata file not found at %s. Initializing empty schema manager.", full_path)

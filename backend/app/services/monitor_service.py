@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from typing import Any, AsyncGenerator
 from pydantic import BaseModel, Field
@@ -29,15 +30,63 @@ class RequestTrace(BaseModel):
 
 class MonitorService:
     """
-    In-memory and Redis backed execution monitor service.
+    In-memory execution monitor service that also persists each finished trace to
+    disk (one JSON file per request_id under `traces_dir`), and reloads the most
+    recent ones on startup - so the Monitor's chat/execution history survives a
+    backend restart instead of being wiped every time.
     Maintains the list of recent query traces and broadcasts realtime events to admin subscribers.
     """
 
-    def __init__(self, max_traces: int = 100) -> None:
+    def __init__(self, max_traces: int = 100, traces_dir: str | None = None) -> None:
         self.max_traces = max_traces
+        self.traces_dir = traces_dir
         self._traces: dict[str, RequestTrace] = {}
         self._ordered_ids: list[str] = []
         self._subscribers: list[asyncio.Queue] = []
+        if self.traces_dir:
+            os.makedirs(self.traces_dir, exist_ok=True)
+            self._load_persisted_traces()
+
+    def _trace_file_path(self, request_id: str) -> str | None:
+        if not self.traces_dir:
+            return None
+        return os.path.join(self.traces_dir, f"{request_id}.json")
+
+    def _load_persisted_traces(self) -> None:
+        """Restores the most recent finished traces from disk on startup."""
+        try:
+            files = [f for f in os.listdir(self.traces_dir) if f.endswith(".json")]
+        except Exception as e:
+            logger.warning("Failed to list persisted traces in %s: %s", self.traces_dir, e)
+            return
+
+        # Newest first, by file mtime (a proxy for finish_trace() write time)
+        files.sort(key=lambda f: os.path.getmtime(os.path.join(self.traces_dir, f)), reverse=True)
+
+        loaded = 0
+        for fname in files[: self.max_traces]:
+            try:
+                with open(os.path.join(self.traces_dir, fname), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                trace = RequestTrace(**data)
+                self._traces[trace.request_id] = trace
+                self._ordered_ids.append(trace.request_id)
+                loaded += 1
+            except Exception as e:
+                logger.warning("Failed to load persisted trace %s: %s", fname, e)
+
+        if loaded:
+            logger.info("Restored %d persisted trace(s) from %s", loaded, self.traces_dir)
+
+    def _persist_trace(self, trace: RequestTrace) -> None:
+        path = self._trace_file_path(trace.request_id)
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(trace.model_dump(), f, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.warning("Failed to persist trace %s: %s", trace.request_id, e)
 
     def start_trace(self, request_id: str, session_id: str, query: str) -> RequestTrace:
         trace = RequestTrace(
@@ -109,6 +158,7 @@ class MonitorService:
             trace.total_latency_ms = total_latency_ms
             trace.final_response = final_response
             trace.error = error
+            self._persist_trace(trace)
             self._broadcast({
                 "event": "trace_finished",
                 "request_id": request_id,

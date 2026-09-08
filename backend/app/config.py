@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     cors_origins: str | list[str] = Field(default="*", alias="CORS_ORIGINS")
 
+    # Data directory: where business_knowledge.json, schemas.json, sql_examples.json,
+    # system_prompts.json and runtime logs are stored - kept OUTSIDE the backend
+    # source tree so they survive redeploys/image rebuilds and can point at real
+    # storage (e.g. /usr/local/aimkt/data) in production. Defaults to <repo_root>/data,
+    # a sibling of backend/, frontend/, monitor/, for local/dev use.
+    data_dir: str = Field(default="../data", alias="DATA_DIR")
+
     # Qdrant settings
     qdrant_host: str = Field(default="qdrant", alias="QDRANT_HOST")
     qdrant_port: int = Field(default=6333, alias="QDRANT_PORT")

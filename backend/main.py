@@ -10,10 +10,10 @@ from app.api.endpoints import router
 from app.config import settings
 from app.runtime import ApplicationServices
 
-import os
 import sys
 
 from app.logging_utils import PerRequestFileHandler
+from app.paths import get_logs_dir
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 # --- Configure Per-Request Chat Pipeline Log Files ---
 # Every request used to be appended to one shared chat_pipeline.log, which made it
 # hard to follow a single request's Step 1 -> 6 trace among concurrent traffic.
-# Each request now gets its own file at logs/requests/<request_id>.log instead -
-# see app/logging_utils.py for how request_id is propagated via a contextvar.
-LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-REQUEST_LOGS_DIR = os.path.join(LOGS_DIR, "requests")
+# Each request now gets its own file at <DATA_DIR>/logs/requests/<request_id>.log
+# instead - stored outside the source tree (see app/paths.py) so logs survive a
+# redeploy - see app/logging_utils.py for how request_id is propagated via a contextvar.
+REQUEST_LOGS_DIR = get_logs_dir("requests")
 
 chat_file_handler = PerRequestFileHandler(REQUEST_LOGS_DIR)
 chat_file_handler.setLevel(logging.INFO)

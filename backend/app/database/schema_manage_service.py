@@ -5,6 +5,7 @@ import logging
 import os
 from typing import Any
 from app.database.schema_manager import ColumnMetadata, SchemaManager, TableSchemaMetadata
+from app.paths import resolve_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,7 @@ class SchemaManageService:
         self.schema_file_path = schema_file_path
 
     def _resolve_full_path(self) -> str:
-        if os.path.isabs(self.schema_file_path):
-            return self.schema_file_path
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_dir, self.schema_file_path)
+        return resolve_data_path(self.schema_file_path)
 
     def _save_to_file(self) -> bool:
         """Saves current in-memory schemas to the JSON file."""

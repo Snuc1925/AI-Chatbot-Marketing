@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.embeddings.openai_provider import OpenAIEmbeddingProvider
+from app.paths import resolve_data_path
 from app.vectorstores.base import VectorMatch, VectorRecord
 from app.vectorstores.qdrant_store import QdrantVectorStore
 
@@ -17,17 +18,7 @@ logger = logging.getLogger(__name__)
 def resolve_file_path(file_path: str) -> str:
     if os.path.isabs(file_path) and os.path.exists(file_path):
         return file_path
-
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    candidate_paths = [
-        os.path.join(base_dir, file_path),
-        os.path.join(os.path.dirname(base_dir), file_path),
-        file_path,
-    ]
-    for p in candidate_paths:
-        if os.path.exists(p):
-            return p
-    return file_path
+    return resolve_data_path(file_path)
 
 
 class SqlExampleItem(BaseModel):

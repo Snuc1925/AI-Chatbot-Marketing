@@ -6,6 +6,8 @@ import os
 import threading
 from typing import Any
 
+from app.paths import resolve_data_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,10 +95,7 @@ class PromptManageService:
         self.reload()
 
     def _resolve_full_path(self) -> str:
-        if os.path.isabs(self.prompts_file_path):
-            return self.prompts_file_path
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_dir, self.prompts_file_path)
+        return resolve_data_path(self.prompts_file_path)
 
     def reload(self) -> dict[str, str]:
         """Reloads prompts from the JSON file, seeding it with defaults if it doesn't exist yet."""

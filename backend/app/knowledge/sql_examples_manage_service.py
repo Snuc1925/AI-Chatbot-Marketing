@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.knowledge.sql_examples_service import SqlExamplesService
+from app.paths import resolve_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,7 @@ class SqlExamplesManageService:
         self.sql_examples_file_path = sql_examples_file_path
 
     def _resolve_file_path(self) -> Path:
-        if os.path.isabs(self.sql_examples_file_path):
-            return Path(self.sql_examples_file_path)
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        return base_dir / self.sql_examples_file_path
+        return Path(resolve_data_path(self.sql_examples_file_path))
 
     def _load_raw_rules(self) -> list[dict[str, Any]]:
         file_path = self._resolve_file_path()

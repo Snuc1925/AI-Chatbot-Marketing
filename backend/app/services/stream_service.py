@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator
 from app.database.clickhouse_client import ClickHouseClient
 from app.database.schema_manager import SchemaManager
 from app.knowledge.knowledge_service import KnowledgeService
+from app.logging_utils import get_or_create_request_id
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient, LLMTrace, SqlQueryItem
 from app.services.chat_service import ChatRequest, ChatResponse, CitationItem, log_llm_interaction
@@ -60,7 +61,9 @@ class StreamChatService:
         t_request_start = time.perf_counter()
         user_query = request.query.strip()
         session_id = request.session_id or str(uuid.uuid4())
-        request_id = f"req-{int(time.time()*1000)}-{uuid.uuid4().hex[:6]}"
+        # Reuses the request_id already assigned by the endpoint (see app/logging_utils.py)
+        # so this request's logs land in the same per-request log file.
+        request_id = get_or_create_request_id()
 
         logger.info("================================================================================")
         logger.info("[STREAM REQUEST START] ID: %s | Session: %s", request_id, session_id)
@@ -169,45 +172,50 @@ class StreamChatService:
         yield sse_event("step_done", step_rag_data)
 
         # 2.5. Step: Few-Shot Golden SQL Examples (Qdrant / Full)
-        t_step = time.perf_counter()
-        yield sse_event("step_start", {
-            "step": "SQL_EXAMPLES",
-            "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
-            "status": "running",
-        })
-
+        # HIDDEN (not deleted): SQL Examples feature is intentionally disabled - its
+        # content now overlaps with Business Knowledge, so this step is no longer
+        # emitted to the prompt, logs, or the Monitor UI's realtime pipeline view.
+        # The underlying service/API/data file are left untouched so this can be
+        # re-enabled later by uncommenting.
         relevant_sql_examples: list[dict[str, Any]] = []
-        if self.sql_examples_service:
-            try:
-                sql_ex_items = self.sql_examples_service.retrieve_relevant_examples(user_query)
-                relevant_sql_examples = [{"question": item.question, "sql": item.sql} for item in sql_ex_items]
-                is_sql_rag = getattr(self.sql_examples_service, "enable_sql_examples_rag", True)
-                if is_sql_rag:
-                    logger.info("  [Step 2.5: SQL Examples RAG] Retrieved %d relevant golden SQLs (RAG Mode)", len(sql_ex_items))
-                    for idx, item in enumerate(sql_ex_items, 1):
-                        score_str = f"score={item.score:.4f}" if item.score is not None else "score=N/A"
-                        logger.info("    -> Example %d (%s): '%s'", idx, score_str, item.question[:100])
-                else:
-                    logger.info("  [Step 2.5: Full SQL Examples] Injected all %d golden SQL examples (Direct Mode)", len(relevant_sql_examples))
-                    for idx, item in enumerate(sql_ex_items, 1):
-                        logger.info("    -> Example %d: '%s'", idx, item.question[:100])
-            except Exception as e:
-                logger.warning("  [Step 2.5: SQL Examples] SQL examples retrieval failed: %s", e)
-
-        sql_ex_latency_ms = round((time.perf_counter() - t_step) * 1000, 2)
-        step_sql_ex_data = {
-            "step": "SQL_EXAMPLES",
-            "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
-            "status": "completed",
-            "latency_ms": sql_ex_latency_ms,
-            "data": {
-                "examples_count": len(relevant_sql_examples),
-                "examples": relevant_sql_examples,
-            },
-        }
-        if self.monitor_service:
-            self.monitor_service.record_step(request_id, step_sql_ex_data)
-        yield sse_event("step_done", step_sql_ex_data)
+        # t_step = time.perf_counter()
+        # yield sse_event("step_start", {
+        #     "step": "SQL_EXAMPLES",
+        #     "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
+        #     "status": "running",
+        # })
+        #
+        # if self.sql_examples_service:
+        #     try:
+        #         sql_ex_items = self.sql_examples_service.retrieve_relevant_examples(user_query)
+        #         relevant_sql_examples = [{"question": item.question, "sql": item.sql} for item in sql_ex_items]
+        #         is_sql_rag = getattr(self.sql_examples_service, "enable_sql_examples_rag", True)
+        #         if is_sql_rag:
+        #             logger.info("  [Step 2.5: SQL Examples RAG] Retrieved %d relevant golden SQLs (RAG Mode)", len(sql_ex_items))
+        #             for idx, item in enumerate(sql_ex_items, 1):
+        #                 score_str = f"score={item.score:.4f}" if item.score is not None else "score=N/A"
+        #                 logger.info("    -> Example %d (%s): '%s'", idx, score_str, item.question[:100])
+        #         else:
+        #             logger.info("  [Step 2.5: Full SQL Examples] Injected all %d golden SQL examples (Direct Mode)", len(relevant_sql_examples))
+        #             for idx, item in enumerate(sql_ex_items, 1):
+        #                 logger.info("    -> Example %d: '%s'", idx, item.question[:100])
+        #     except Exception as e:
+        #         logger.warning("  [Step 2.5: SQL Examples] SQL examples retrieval failed: %s", e)
+        #
+        # sql_ex_latency_ms = round((time.perf_counter() - t_step) * 1000, 2)
+        # step_sql_ex_data = {
+        #     "step": "SQL_EXAMPLES",
+        #     "title": "Truy xuất Mẫu Truy Vấn Đã Kiểm Chứng (Few-Shot SQLs)",
+        #     "status": "completed",
+        #     "latency_ms": sql_ex_latency_ms,
+        #     "data": {
+        #         "examples_count": len(relevant_sql_examples),
+        #         "examples": relevant_sql_examples,
+        #     },
+        # }
+        # if self.monitor_service:
+        #     self.monitor_service.record_step(request_id, step_sql_ex_data)
+        # yield sse_event("step_done", step_sql_ex_data)
 
         # 3. Step: Schema Context
         t_step = time.perf_counter()

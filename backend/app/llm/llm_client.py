@@ -8,6 +8,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
+from app.llm.prompt_service import PromptManageService
+
 logger = logging.getLogger(__name__)
 
 
@@ -108,6 +110,7 @@ class LLMClient:
         api_key: str | None = None,
         model: str = "gpt-4o-mini",
         base_url: str | None = None,
+        prompt_service: PromptManageService | None = None,
     ) -> None:
         self.model = model
         clean_base_url = base_url.strip() if (base_url and base_url.strip()) else None
@@ -116,6 +119,10 @@ class LLMClient:
             api_key=clean_api_key or "placeholder-key",
             base_url=clean_base_url,
         )
+        # System prompts are no longer hardcoded here - they're served from
+        # PromptManageService (backed by system_prompts.json) so they can be viewed
+        # and edited from the Monitor UI and take effect immediately, no restart needed.
+        self.prompt_service = prompt_service or PromptManageService()
 
     def analyze_clarify_and_answer(
         self,
@@ -132,42 +139,7 @@ class LLMClient:
         Returns extracted slots, clarification requirements, ClickHouse SQL queries (if ready),
         and full LLM execution trace with token metrics.
         """
-        system_prompt = (
-            "Bạn là một Trợ lý AI Marketing Analytics chuyên nghiệp cho hệ thống Marketing của Viettel.\n"
-            "Nhiệm vụ của bạn là dựa vào quy tắc Tri thức Nghiệp vụ (Business Knowledge), Cấu trúc cơ sở dữ liệu ClickHouse (Schema Context) "
-            "và các Câu lệnh SQL Mẫu đã kiểm chứng (Few-Shot SQL Examples) để phân tích câu hỏi của người dùng và sinh dữ liệu định dạng JSON chuẩn.\n\n"
-            "CÁC QUY TẮC BẮT BUỘC:\n"
-            "1. Xác định ý định người dùng và trích xuất các thực thể (slots) như: tên chiến dịch (`campaign_name` hoặc `program_code`), "
-            "khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
-            "2. QUY TẮC ƯU TIÊN VỀ CÂU LỆNH SQL MẪU (FEW-SHOT SQL EXAMPLES):\n"
-            "   - Nếu được cung cấp các Câu lệnh SQL mẫu đã kiểm chứng, bạn PHẢI ƯU TIÊN THAM KHẢO VÀ DỰA VÀO CẤU TRÚC SQL NÀY (các bảng cần JOIN, tên cột chuẩn, điều kiện WHERE lọc `partition` dạng số `YYYYMMDD`, các hàm ClickHouse như `COUNTIf`, `toYYYYMM`, `toDate(toString(partition))`, v.v.) để sinh câu truy vấn SQL chính xác nhất.\n"
-            "   - Chỉ điều chỉnh các giá trị filter cụ thể (như ngày tháng, tên kênh, tên chiến dịch) phù hợp với câu hỏi hiện tại của người dùng.\n"
-            "3. Nếu câu hỏi của người dùng còn THIẾU thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác (ví dụ: người dùng hỏi 'Tỷ lệ nhắn tin thành công của chiến dịch tháng này' nhưng chưa nói rõ chiến dịch nào): "
-            "   - Đặt `is_clarification_needed`: true\n"
-            "   - Điền câu hỏi làm rõ tự nhiên, lịch sự vào `clarifying_question`.\n"
-            "   - Điền danh sách 3-4 lựa chọn gợi ý cụ thể vào `suggested_options` (ví dụ: ['Chiến dịch 5G', 'Chiến dịch DATA', 'Chiến dịch Mua gói']).\n"
-            "   - Liệt kê các slot còn thiếu vào `missing_slots` (ví dụ: ['campaign_name']).\n"
-            "   - Để `generated_sqls`: [] (chưa sinh SQL khi thiếu thông tin).\n"
-            "4. Nếu câu hỏi ĐÃ ĐỦ thông tin để truy vấn:\n"
-            "   - Đặt `is_clarification_needed`: false\n"
-            "   - `clarifying_question`: null\n"
-            "   - `suggested_options`: []\n"
-            "   - `missing_slots`: []\n"
-            "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
-            "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
-            "{\n"
-            '  "is_clarification_needed": true/false,\n'
-            '  "clarifying_question": "Câu hỏi làm rõ nếu cần hoặc null",\n'
-            '  "suggested_options": ["Lựa chọn 1", "Lựa chọn 2"],\n'
-            '  "extracted_entities": {"slot_name": "value"},\n'
-            '  "missing_slots": ["slot_name"],\n'
-            '  "suggested_answer": "Câu trả lời trực tiếp nếu không cần truy vấn DB hoặc null",\n'
-            '  "generated_sqls": [\n'
-            '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "sql": "SELECT ... \\nFROM ... \\nWHERE ..."}\n'
-            '  ],\n'
-            '  "is_intent_switched": false\n'
-            "}"
-        )
+        system_prompt = self.prompt_service.get_prompt("analyze_clarify_and_answer")
 
         user_content = f"--- CÂU HỎI NGƯỜI DÙNG ---\n{user_query}\n\n"
 
@@ -271,19 +243,7 @@ class LLMClient:
         with <cite id="sql_X">metric_value</cite> tags.
         Returns the formatted string and the LLMTrace with token metrics.
         """
-        system_prompt = (
-            "Bạn là một trợ lý AI Marketing Analytics chuyên nghiệp của Viettel.\n"
-            "Nhiệm vụ của bạn là dựa vào kết quả truy vấn SQL thực tế từ Database ClickHouse và quy tắc Tri thức Nghiệp vụ "
-            "để soạn thảo câu trả lời hoàn chỉnh, chính xác, tự nhiên, chuyên nghiệp cho người dùng.\n\n"
-            "QUY TẮC BẮT BUỘC VỀ TRÍCH DẪN SỐ LIỆU (CITATIONS):\n"
-            "1. Bất kỳ khi nào bạn trích dẫn một số liệu, tỉ lệ phần trăm, doanh thu, số lượng bản ghi hoặc dữ liệu tính toán từ câu truy vấn có mã `sql_X`, "
-            "bạn PHẢI bọc chính xác cụm từ/số liệu đó trong thẻ `<cite id=\"sql_X\">số liệu</cite>`.\n"
-            "   - Ví dụ: 'Doanh thu chiến dịch đạt <cite id=\"sql_1\">3.500.000.000 VNĐ</cite> với tỷ lệ gửi thành công là <cite id=\"sql_2\">98.7%</cite>.'\n"
-            "   - Ví dụ: 'Tổng số <cite id=\"sql_1\">15.420</cite> thuê bao đã mua gói cước thành công.'\n"
-            "2. Trình bày số liệu rõ ràng, dễ hiểu, format số hàng nghìn bằng dấu chấm (ví dụ: 1.000.000) và giữ giọng điệu chuyên nghiệp.\n"
-            "3. Không tự bịa số liệu nếu trong kết quả query không có. Nếu query không có dữ liệu (kết quả rỗng), hãy thông báo rõ ràng là chưa ghi nhận số liệu trong khoảng thời gian này.\n"
-            "4. Trả về trực tiếp nội dung văn bản câu trả lời (Markdown), KHÔNG bọc trong JSON."
-        )
+        system_prompt = self.prompt_service.get_prompt("synthesize_answer_with_citations")
 
         results_formatted = []
         for item in sql_query_results:

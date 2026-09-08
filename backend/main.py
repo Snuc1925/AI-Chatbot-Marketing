@@ -12,7 +12,8 @@ from app.runtime import ApplicationServices
 
 import os
 import sys
-from logging.handlers import RotatingFileHandler
+
+from app.logging_utils import PerRequestFileHandler
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -22,17 +23,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Configure Dedicated Chat Pipeline Log File ---
+# --- Configure Per-Request Chat Pipeline Log Files ---
+# Every request used to be appended to one shared chat_pipeline.log, which made it
+# hard to follow a single request's Step 1 -> 6 trace among concurrent traffic.
+# Each request now gets its own file at logs/requests/<request_id>.log instead -
+# see app/logging_utils.py for how request_id is propagated via a contextvar.
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-os.makedirs(LOGS_DIR, exist_ok=True)
-CHAT_LOG_FILE = os.path.join(LOGS_DIR, "chat_pipeline.log")
+REQUEST_LOGS_DIR = os.path.join(LOGS_DIR, "requests")
 
-chat_file_handler = RotatingFileHandler(
-    CHAT_LOG_FILE,
-    maxBytes=20 * 1024 * 1024,  # 20 MB
-    backupCount=10,
-    encoding="utf-8",
-)
+chat_file_handler = PerRequestFileHandler(REQUEST_LOGS_DIR)
 chat_file_handler.setLevel(logging.INFO)
 chat_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 
@@ -40,11 +39,11 @@ chat_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(
 for logger_name in ["app.services.chat_service", "app.services.stream_service", "app.api.endpoints", "app.llm.llm_client"]:
     target_logger = logging.getLogger(logger_name)
     # Remove existing file handlers if any to avoid duplicate entries during hot reload
-    target_logger.handlers = [h for h in target_logger.handlers if not isinstance(h, RotatingFileHandler)]
+    target_logger.handlers = [h for h in target_logger.handlers if not isinstance(h, PerRequestFileHandler)]
     target_logger.addHandler(chat_file_handler)
     target_logger.propagate = True
 
-logger.info("Dedicated chat pipeline log initialized at: %s", CHAT_LOG_FILE)
+logger.info("Per-request chat pipeline logs initialized at: %s/<request_id>.log", REQUEST_LOGS_DIR)
 
 
 @asynccontextmanager

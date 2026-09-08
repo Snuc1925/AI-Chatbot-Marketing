@@ -17,6 +17,7 @@ from app.knowledge.sql_examples_manage_service import (
     SqlExampleCreate,
     SqlExampleUpdate,
 )
+from app.logging_utils import get_or_create_request_id
 from app.services.chat_service import ChatRequest, ChatResponse
 from app.sessions.models import SessionState
 
@@ -32,9 +33,16 @@ class SqlExampleModeRequest(BaseModel):
     enable_rag: bool
 
 
+class SystemPromptUpdate(BaseModel):
+    content: str
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request_body: ChatRequest, request: Request) -> ChatResponse:
     services = request.app.state.services
+    # Assign this request's ID up-front so every log line from here down - this
+    # endpoint, chat_service, llm_client - lands in the same per-request log file.
+    get_or_create_request_id()
     logger.info(">>> [POST /api/chat] Received request | query='%s' | session_id=%s", request_body.query, request_body.session_id)
     try:
         response = services.chat_service.process_chat(request_body)
@@ -52,6 +60,7 @@ async def chat_stream_endpoint(request_body: ChatRequest, request: Request):
     LLM reasoning traces, and token metrics.
     """
     services = request.app.state.services
+    get_or_create_request_id()
     logger.info(">>> [POST /api/chat/stream] SSE stream started | query='%s' | session_id=%s", request_body.query, request_body.session_id)
     generator = services.stream_chat_service.stream_chat(request_body)
     return StreamingResponse(
@@ -347,6 +356,35 @@ async def call_schema_tool(payload: dict[str, Any], request: Request) -> dict[st
     args = payload.get("arguments", {})
     raw_res = services.schema_tool.execute_tool(tool_name, args)
     return {"status": "success", "result": json.loads(raw_res)}
+
+
+# --- System Prompts Management (editable at runtime, no restart needed) ---
+
+@router.get("/prompts")
+async def list_system_prompts(request: Request) -> list[dict[str, Any]]:
+    """Lists all editable LLM system prompts currently in effect."""
+    services = request.app.state.services
+    return services.prompt_manage_service.list_prompts()
+
+
+@router.put("/prompts/{key}")
+async def update_system_prompt(key: str, payload: SystemPromptUpdate, request: Request) -> dict[str, Any]:
+    """Updates a system prompt's content. Takes effect on the very next LLM call."""
+    services = request.app.state.services
+    try:
+        return services.prompt_manage_service.update_prompt(key, payload.content)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/prompts/{key}/reset")
+async def reset_system_prompt(key: str, request: Request) -> dict[str, Any]:
+    """Resets a system prompt back to its built-in default content."""
+    services = request.app.state.services
+    try:
+        return services.prompt_manage_service.reset_prompt(key)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/monitor/live")

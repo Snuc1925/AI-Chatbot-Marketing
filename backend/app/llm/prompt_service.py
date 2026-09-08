@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import threading
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+# Built-in defaults: the single source of truth for prompt content when the
+# JSON file is missing/corrupted, and the seed written to it on first boot.
+# Keep these in sync with what used to be hardcoded in llm_client.py.
+DEFAULT_PROMPTS: dict[str, str] = {
+    "analyze_clarify_and_answer": (
+        "Bạn là một Trợ lý AI Marketing Analytics chuyên nghiệp cho hệ thống Marketing của Viettel.\n"
+        "Nhiệm vụ của bạn là dựa vào quy tắc Tri thức Nghiệp vụ (Business Knowledge), Cấu trúc cơ sở dữ liệu ClickHouse (Schema Context) "
+        "và các Câu lệnh SQL Mẫu đã kiểm chứng (Few-Shot SQL Examples) để phân tích câu hỏi của người dùng và sinh dữ liệu định dạng JSON chuẩn.\n\n"
+        "CÁC QUY TẮC BẮT BUỘC:\n"
+        "1. Xác định ý định người dùng và trích xuất các thực thể (slots) như: tên chiến dịch (`campaign_name` hoặc `program_code`), "
+        "khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
+        "2. QUY TẮC ƯU TIÊN VỀ CÂU LỆNH SQL MẪU (FEW-SHOT SQL EXAMPLES):\n"
+        "   - Nếu được cung cấp các Câu lệnh SQL mẫu đã kiểm chứng, bạn PHẢI ƯU TIÊN THAM KHẢO VÀ DỰA VÀO CẤU TRÚC SQL NÀY (các bảng cần JOIN, tên cột chuẩn, điều kiện WHERE lọc `partition` dạng số `YYYYMMDD`, các hàm ClickHouse như `COUNTIf`, `toYYYYMM`, `toDate(toString(partition))`, v.v.) để sinh câu truy vấn SQL chính xác nhất.\n"
+        "   - Chỉ điều chỉnh các giá trị filter cụ thể (như ngày tháng, tên kênh, tên chiến dịch) phù hợp với câu hỏi hiện tại của người dùng.\n"
+        "3. Nếu câu hỏi của người dùng còn THIẾU thông tin quan trọng cần thiết để truy vấn dữ liệu chính xác (ví dụ: người dùng hỏi 'Tỷ lệ nhắn tin thành công của chiến dịch tháng này' nhưng chưa nói rõ chiến dịch nào): "
+        "   - Đặt `is_clarification_needed`: true\n"
+        "   - Điền câu hỏi làm rõ tự nhiên, lịch sự vào `clarifying_question`.\n"
+        "   - Điền danh sách 3-4 lựa chọn gợi ý cụ thể vào `suggested_options` (ví dụ: ['Chiến dịch 5G', 'Chiến dịch DATA', 'Chiến dịch Mua gói']).\n"
+        "   - Liệt kê các slot còn thiếu vào `missing_slots` (ví dụ: ['campaign_name']).\n"
+        "   - Để `generated_sqls`: [] (chưa sinh SQL khi thiếu thông tin).\n"
+        "4. Nếu câu hỏi ĐÃ ĐỦ thông tin để truy vấn:\n"
+        "   - Đặt `is_clarification_needed`: false\n"
+        "   - `clarifying_question`: null\n"
+        "   - `suggested_options`: []\n"
+        "   - `missing_slots`: []\n"
+        "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
+        "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
+        "{\n"
+        '  "is_clarification_needed": true/false,\n'
+        '  "clarifying_question": "Câu hỏi làm rõ nếu cần hoặc null",\n'
+        '  "suggested_options": ["Lựa chọn 1", "Lựa chọn 2"],\n'
+        '  "extracted_entities": {"slot_name": "value"},\n'
+        '  "missing_slots": ["slot_name"],\n'
+        '  "suggested_answer": "Câu trả lời trực tiếp nếu không cần truy vấn DB hoặc null",\n'
+        '  "generated_sqls": [\n'
+        '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "sql": "SELECT ... \\nFROM ... \\nWHERE ..."}\n'
+        '  ],\n'
+        '  "is_intent_switched": false\n'
+        "}"
+    ),
+    "synthesize_answer_with_citations": (
+        "Bạn là một trợ lý AI Marketing Analytics chuyên nghiệp của Viettel.\n"
+        "Nhiệm vụ của bạn là dựa vào kết quả truy vấn SQL thực tế từ Database ClickHouse và quy tắc Tri thức Nghiệp vụ "
+        "để soạn thảo câu trả lời hoàn chỉnh, chính xác, tự nhiên, chuyên nghiệp cho người dùng.\n\n"
+        "QUY TẮC BẮT BUỘC VỀ TRÍCH DẪN SỐ LIỆU (CITATIONS):\n"
+        "1. Bất kỳ khi nào bạn trích dẫn một số liệu, tỉ lệ phần trăm, doanh thu, số lượng bản ghi hoặc dữ liệu tính toán từ câu truy vấn có mã `sql_X`, "
+        "bạn PHẢI bọc chính xác cụm từ/số liệu đó trong thẻ `<cite id=\"sql_X\">số liệu</cite>`.\n"
+        "   - Ví dụ: 'Doanh thu chiến dịch đạt <cite id=\"sql_1\">3.500.000.000 VNĐ</cite> với tỷ lệ gửi thành công là <cite id=\"sql_2\">98.7%</cite>.'\n"
+        "   - Ví dụ: 'Tổng số <cite id=\"sql_1\">15.420</cite> thuê bao đã mua gói cước thành công.'\n"
+        "2. Trình bày số liệu rõ ràng, dễ hiểu, format số hàng nghìn bằng dấu chấm (ví dụ: 1.000.000) và giữ giọng điệu chuyên nghiệp.\n"
+        "3. Không tự bịa số liệu nếu trong kết quả query không có. Nếu query không có dữ liệu (kết quả rỗng), hãy thông báo rõ ràng là chưa ghi nhận số liệu trong khoảng thời gian này.\n"
+        "4. Trả về trực tiếp nội dung văn bản câu trả lời (Markdown), KHÔNG bọc trong JSON."
+    ),
+}
+
+PROMPT_LABELS: dict[str, str] = {
+    "analyze_clarify_and_answer": "Phân tích ý định / Trích xuất Slot / Sinh SQL",
+    "synthesize_answer_with_citations": "Tổng hợp câu trả lời & Trích dẫn (Citations)",
+}
+
+
+class PromptManageService:
+    """
+    Serves editable LLM system prompts from a JSON file (default: system_prompts.json),
+    cached in memory so every chat request reads the latest content with zero extra I/O.
+    Edits made via the Monitor UI / API call `update_prompt`, which updates the in-memory
+    cache AND persists to disk - the next LLM call picks it up immediately, no backend
+    restart required.
+    """
+
+    def __init__(self, prompts_file_path: str = "system_prompts.json") -> None:
+        self.prompts_file_path = prompts_file_path
+        self._lock = threading.Lock()
+        self._prompts: dict[str, str] = {}
+        self.reload()
+
+    def _resolve_full_path(self) -> str:
+        if os.path.isabs(self.prompts_file_path):
+            return self.prompts_file_path
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(base_dir, self.prompts_file_path)
+
+    def reload(self) -> dict[str, str]:
+        """Reloads prompts from the JSON file, seeding it with defaults if it doesn't exist yet."""
+        full_path = self._resolve_full_path()
+        loaded: dict[str, str] = {}
+        file_exists = os.path.exists(full_path)
+        if file_exists:
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    loaded = {k: v for k, v in data.items() if isinstance(v, str)}
+            except Exception as e:
+                logger.error("Failed to load system prompts from %s: %s", full_path, e)
+        else:
+            logger.warning("System prompts file not found at %s. Seeding it with built-in defaults.", full_path)
+
+        with self._lock:
+            self._prompts = {**DEFAULT_PROMPTS, **loaded}
+
+        if not file_exists:
+            self._save_to_file()
+
+        logger.info("Loaded %d system prompt(s) from %s", len(self._prompts), full_path)
+        return dict(self._prompts)
+
+    def _save_to_file(self) -> bool:
+        full_path = self._resolve_full_path()
+        try:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                json.dump(self._prompts, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            logger.error("Failed to save system prompts to %s: %s", full_path, e)
+            return False
+
+    def get_prompt(self, key: str) -> str:
+        with self._lock:
+            return self._prompts.get(key, DEFAULT_PROMPTS.get(key, ""))
+
+    def list_prompts(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                {"key": key, "label": PROMPT_LABELS.get(key, key), "content": value, "is_default": value == DEFAULT_PROMPTS.get(key)}
+                for key, value in self._prompts.items()
+            ]
+
+    def update_prompt(self, key: str, content: str) -> dict[str, Any]:
+        if key not in DEFAULT_PROMPTS:
+            raise KeyError(f"Prompt key '{key}' không hợp lệ.")
+        with self._lock:
+            self._prompts[key] = content
+            self._save_to_file()
+        logger.info("System prompt '%s' updated (%d chars) - effective immediately on the next LLM call.", key, len(content))
+        return {"key": key, "label": PROMPT_LABELS.get(key, key), "content": content, "is_default": content == DEFAULT_PROMPTS.get(key)}
+
+    def reset_prompt(self, key: str) -> dict[str, Any]:
+        """Resets a single prompt back to its built-in default."""
+        if key not in DEFAULT_PROMPTS:
+            raise KeyError(f"Prompt key '{key}' không hợp lệ.")
+        return self.update_prompt(key, DEFAULT_PROMPTS[key])

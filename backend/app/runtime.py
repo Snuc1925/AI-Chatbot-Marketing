@@ -13,6 +13,7 @@ from app.knowledge.knowledge_service import KnowledgeService
 from app.knowledge.sql_examples_manage_service import SqlExamplesManageService
 from app.knowledge.sql_examples_service import SqlExamplesService
 from app.llm.llm_client import LLMClient
+from app.llm.prompt_service import PromptManageService
 from app.llm.tools.schema_tool import SchemaAgentTool
 from app.services.chat_service import ChatService
 from app.services.monitor_service import MonitorService
@@ -28,6 +29,7 @@ class ApplicationServices:
     knowledge_vector_store: QdrantVectorStore
     sql_examples_vector_store: QdrantVectorStore
     embedding_provider: OpenAIEmbeddingProvider
+    prompt_manage_service: PromptManageService
     llm_client: LLMClient
     session_store: BaseSessionStore
     knowledge_service: KnowledgeService
@@ -64,11 +66,17 @@ class ApplicationServices:
             vector_size=settings.embedding_size,
         )
 
-        # 3. LLM Client
+        # 3. LLM Client (system prompts served from PromptManageService, editable
+        # at runtime via the Monitor UI - no hardcoded prompts, no restart needed)
+        prompt_manage_service = PromptManageService(
+            prompts_file_path=settings.system_prompts_file_path,
+        )
+
         llm_client = LLMClient(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             base_url=settings.llm_base_url,
+            prompt_service=prompt_manage_service,
         )
 
         # 4. Redis Session Store
@@ -171,6 +179,7 @@ class ApplicationServices:
             knowledge_vector_store=knowledge_vector_store,
             sql_examples_vector_store=sql_examples_vector_store,
             embedding_provider=embedding_provider,
+            prompt_manage_service=prompt_manage_service,
             llm_client=llm_client,
             session_store=session_store,
             knowledge_service=knowledge_service,

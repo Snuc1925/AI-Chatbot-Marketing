@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
     llm_base_url: str | None = Field(default=None, alias="LLM_BASE_URL")
+    system_prompts_file_path: str = Field(default="system_prompts.json", alias="SYSTEM_PROMPTS_FILE_PATH")
 
     # Knowledge & RAG settings
     knowledge_collection_name: str = Field(default="business_knowledge", alias="KNOWLEDGE_COLLECTION_NAME")

@@ -58,10 +58,22 @@ class LLMTrace(BaseModel):
 class SqlQueryItem(BaseModel):
     id: str = Field(description="Unique ID for citation reference, e.g. 'sql_1', 'sql_2'")
     title: str = Field(default="Truy vấn ClickHouse", description="Short title or description of this query")
+    reasoning: str = Field(
+        default="",
+        description="Short chain-of-thought for THIS specific query only (1-3 câu): bảng/cột nào được chọn, vì sao JOIN như vậy, "
+        "quy tắc business knowledge hoặc SQL mẫu nào được áp dụng. Phải được model sinh ra TRƯỚC field `sql` để lời giải thích "
+        "thật sự dẫn dắt việc sinh SQL, không phải giải thích ngược sau khi đã có SQL.",
+    )
     sql: str = Field(description="Valid ClickHouse SQL SELECT query")
 
 
 class ClarifyAnalysisResult(BaseModel):
+    intent_reasoning: str = Field(
+        default="",
+        description="Short chain-of-thought (1-3 câu) về việc hiểu ý định người dùng và quyết định có cần hỏi lại "
+        "(is_clarification_needed) hay không - PHẢI được sinh TRƯỚC is_clarification_needed/extracted_entities để "
+        "quyết định phía sau thực sự dựa vào lý luận này.",
+    )
     is_clarification_needed: bool = Field(
         default=False,
         description="True if the user query is missing required parameters, False otherwise."
@@ -206,6 +218,8 @@ class LLMClient:
             data["extracted_entities"] = merged_slots
 
             # Ensure all required fields exist
+            if "intent_reasoning" not in data or data.get("intent_reasoning") is None:
+                data["intent_reasoning"] = ""
             if "is_clarification_needed" not in data:
                 data["is_clarification_needed"] = bool(data.get("clarifying_question"))
             if "suggested_options" not in data:

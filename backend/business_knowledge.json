@@ -1,30 +1,18 @@
 [
   {
-    "topic": "Xác định số lượt gửi tin thành công theo từng kênh",
-    "description": "Tỉ lệ nhắn tin thành công = (Số lượt gửi thành công / Tổng lượt gửi) * 100%. Số lượt gửi thành công được xác định theo từng kênh truyền thông như sau:\n- Kênh SMS: Tra cứu trong bảng sms_log_v2 với điều kiện status = '0'.\n- Kênh MyViettel (myvt): Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '1'.\n- Kênh Callbot: Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '200'."
+    "topic": "Xác định số lượt gửi tin/nhắn tin (không phải nhận tin) thành công theo từng kênh",
+    "description": "Tỉ lệ gửi tin/nhắn tin thành công = (Số lượt gửi thành công / Tổng lượt gửi) * 100%. Số lượt gửi thành công được xác định theo từng kênh truyền thông như sau:\n- Kênh SMS: Tra cứu trong bảng sms_log_v2 với điều kiện status = '0'.\n- Kênh MyViettel (myvt): Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '1'.\n- Kênh Callbot: Tra cứu trong bảng webservice_log_v2_manh với điều kiện status = '200'. \nVí dụ: SELECT \n    COUNT() AS total_requests,\n    COUNTIf(status = '1') AS success_requests,\n    round(COUNTIf(status = '1') / COUNT() * 100, 2) AS success_rate\nFROM default.webservice_log_v2_manh\nWHERE toYYYYMM(toDate(toString(partition))) = toYYYYMM(now())"
   },
   {
-    "topic": "Xác định số thuê bao phản hồi và mua gói cước",
-    "description": "Để xác định số thuê bao phản hồi (mua gói cước): Thực hiện join bảng danh sách chi tiết chiến dịch f_adpm_aimkt_campaign_customer_detail với bảng ghi log truyền thông theo kênh (bảng sms_log_v2 với kênh SMS, bảng webservice_log_v2_manh với kênh MyViettel hoặc Callbot) bằng trường isdn hoặc msisdn để lọc ra tập thuê bao đã nhận tin thành công. Sau đó join tiếp với bảng log mua gói f023_mpre_vas_manh bằng isdn để kiểm tra thuê bao có mua đúng gói hay không (điều kiện: f023_mpre_vas_manh.sub_service = f_adpm_aimkt_campaign_customer_detail.vas_name) trong khoảng thời gian diễn ra chiến dịch."
+    "topic": "Xác định thuê bao nhận tin/truyền thông thành công/không thành công",
+    "description": "f_adpm_aimkt_campaign_customer_detail: trangthai_truyenthong = tttc, ko_tttc\n select msisdn from f_adpm_aimkt_campaign_customer_detail where trangthai_truyenthong = tttc"
   },
   {
-    "topic": "Quy tắc gán kênh mua gói và tính toán doanh thu",
-    "description": "Hiện tại bảng f023_mpre_vas_manh không có trường thông tin để xác định cụ thể thuê bao mua gói qua kênh nào. Quy ước nghiệp vụ: Nếu thuê bao được khuyến nghị qua kênh nào (SMS, MyViettel, Callbot) mà có phát sinh log mua gói cước tương ứng trong bảng f023_mpre_vas_manh thì tính ghi nhận phản hồi và doanh thu mua gói luôn cho kênh truyền thông đó."
+    "topic": "Xác định thuê bao mua gói",
+    "description": "Select isdn from f023_mpre_vas_manh"
   },
   {
-    "topic": "Xác định thời gian phản hồi của khách hàng",
-    "description": "Thời gian phản hồi của khách hàng được tính bằng: Thời điểm phản hồi đầu tiên (trường sta_datetime trong bảng f023_mpre_vas_manh) trừ đi Thời điểm nhận tin truyền thông thành công (trường send_time trong bảng sms_log_v2 hoặc trường request_time trong bảng webservice_log_v2)."
-  },
-  {
-    "topic": "Quy tắc ánh xạ mã tỉnh thành",
-    "description": "Mã tỉnh thành trong bảng f_adpm_aimkt_campaign_customer_detail (cột province_code_home) được quy ước bằng ngôn ngữ tự nhiên như sau: HCM là Hồ Chí Minh, CTO là Cần Thơ, SLA là Sơn La, QNI là Quảng Ninh, HUE là Huế, CMU là Cà Mau, HNI là Hà Nội."
-  },
-  {
-    "topic": "Phân loại nhóm độ tuổi khách hàng",
-    "description": "Trường cust_age trong bảng f_adpm_aimkt_campaign_customer_detail gồm 5 nhóm độ tuổi khách hàng chuẩn: 'hoc sinh', 'sinh vien', 'lao dong tre', 'trung nien', 'cao tuoi'."
-  },
-  {
-    "topic": "Khung giờ và thời điểm có tỷ lệ phản hồi cao nhất",
-    "description": "Để phân tích khung giờ có tỷ lệ phản hồi cao nhất (Moment of truth): Trích xuất giờ từ trường sta_datetime hoặc hour_id trong bảng f023_mpre_vas_manh, sau đó tính tỷ lệ phản hồi = (Số thuê bao phản hồi trong khung giờ / Tổng số thuê bao nhận tin thành công) * 100%, gom nhóm theo từng khung giờ (từ 0h đến 23h) hoặc theo loại chiến dịch (chiến dịch Mua gói hoặc chiến dịch Thông báo)."
+    "topic": "Xác định tỷ lệ phản hồi",
+    "description": "Tỷ lệ phản hồi = Số thuê bao mua gói / Số thuê bao nhận tin thành công\nTìm danh sách msisdn nhận tin thành công xong tìm xem có bao nhiêu trong số đó nằm trong các thuê bao mua gói trong thời gian được yêu cầu"
   }
 ]

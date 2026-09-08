@@ -309,7 +309,11 @@ class StreamChatService:
             analysis.missing_slots,
             len(analysis.generated_sqls),
         )
+        if analysis.intent_reasoning:
+            logger.info("    -> Intent Reasoning: %s", analysis.intent_reasoning)
         for sql_item in analysis.generated_sqls:
+            if sql_item.reasoning:
+                logger.info("    -> SQL [%s] Reasoning: %s", sql_item.id, sql_item.reasoning)
             logger.info("    -> SQL [%s] (%s): %s", sql_item.id, sql_item.title, sql_item.sql)
 
         step_llm_data = {
@@ -318,6 +322,7 @@ class StreamChatService:
             "status": "completed",
             "latency_ms": analysis_latency_ms,
             "data": {
+                "intent_reasoning": analysis.intent_reasoning,
                 "is_clarification_needed": analysis.is_clarification_needed,
                 "clarifying_question": analysis.clarifying_question,
                 "suggested_options": analysis.suggested_options,
@@ -349,6 +354,7 @@ class StreamChatService:
                 session_status=session_state.status.value,
                 response_type="clarify",
                 message=bot_msg,
+                intent_reasoning=analysis.intent_reasoning,
                 collected_slots=session_state.collected_slots,
                 missing_slots=session_state.missing_slots,
                 suggested_options=analysis.suggested_options,
@@ -417,6 +423,7 @@ class StreamChatService:
                     id=item.id,
                     type="sql",
                     title=item.title or "Truy vấn ClickHouse",
+                    reasoning=item.reasoning,
                     query=item.sql,
                     raw_result=raw_res,
                     execution_time_ms=exec_time,
@@ -503,6 +510,7 @@ class StreamChatService:
             session_status=session_state.status.value,
             response_type="answer",
             message=bot_msg,
+            intent_reasoning=analysis.intent_reasoning,
             collected_slots=final_slots,
             missing_slots=[],
             suggested_options=[],

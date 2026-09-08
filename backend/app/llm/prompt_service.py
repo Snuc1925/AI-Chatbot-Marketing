@@ -18,6 +18,12 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "Nhiệm vụ của bạn là dựa vào quy tắc Tri thức Nghiệp vụ (Business Knowledge), Cấu trúc cơ sở dữ liệu ClickHouse (Schema Context) "
         "và các Câu lệnh SQL Mẫu đã kiểm chứng (Few-Shot SQL Examples) để phân tích câu hỏi của người dùng và sinh dữ liệu định dạng JSON chuẩn.\n\n"
         "CÁC QUY TẮC BẮT BUỘC:\n"
+        "0. QUY TẮC BẮT BUỘC VỀ CHAIN-OF-THOUGHT (LÝ LUẬN TRƯỚC KHI KẾT LUẬN):\n"
+        "   - Bạn PHẢI điền field `intent_reasoning` (1-3 câu) NGAY ĐẦU TIÊN, TRƯỚC KHI quyết định `is_clarification_needed` và `extracted_entities`. "
+        "Nội dung: hiểu câu hỏi người dùng đang hỏi gì, đã đủ slot cần thiết chưa, vì sao cần/không cần hỏi lại. Đây không phải lời giải thích viết sau khi đã quyết định xong, "
+        "mà chính là bước lý luận để bạn DỰA VÀO ĐÓ mà quyết định `is_clarification_needed`.\n"
+        "   - Với MỖI phần tử trong `generated_sqls`, bạn PHẢI điền field `reasoning` (1-3 câu) NGAY TRƯỚC field `sql` của chính phần tử đó (không viết chung 1 đoạn cho tất cả các câu SQL). "
+        "Nội dung: chọn bảng/cột nào, vì sao JOIN như vậy, áp dụng quy tắc Business Knowledge hoặc SQL Mẫu nào. Đây là bước lý luận để bạn DỰA VÀO ĐÓ mà viết ra `sql` của chính câu đó, không phải giải thích ngược sau khi SQL đã viết xong.\n"
         "1. Xác định ý định người dùng và trích xuất các thực thể (slots) như: tên chiến dịch (`campaign_name` hoặc `program_code`), "
         "khoảng thời gian (`time_range`), kênh truyền thông (`channel` như SMS, MYVIETTEL, CALLBOT), nhóm độ tuổi (`age_group`), tỉnh thành (`province`).\n"
         "2. QUY TẮC ƯU TIÊN VỀ CÂU LỆNH SQL MẪU (FEW-SHOT SQL EXAMPLES):\n"
@@ -34,9 +40,10 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "   - `clarifying_question`: null\n"
         "   - `suggested_options`: []\n"
         "   - `missing_slots`: []\n"
-        "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
-        "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:\n"
+        "   - Sinh danh sách các câu lệnh ClickHouse SQL SELECT tương ứng trong `generated_sqls` (mỗi câu lệnh có `id` như 'sql_1', 'sql_2', `title` mô tả ngắn, `reasoning` theo đúng Quy tắc 0, và `sql` là câu truy vấn ClickHouse hợp lệ, được FORMAT ĐẸP, XUỐNG DÒNG RÕ RÀNG ở các mệnh đề SELECT, FROM, JOIN, WHERE, AND, GROUP BY, ORDER BY).\n"
+        "5. ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC (chú ý thứ tự field - `intent_reasoning` và `reasoning` luôn đứng trước phần chúng dẫn dắt):\n"
         "{\n"
+        '  "intent_reasoning": "1-3 câu lý luận về ý định & việc có cần hỏi lại hay không",\n'
         '  "is_clarification_needed": true/false,\n'
         '  "clarifying_question": "Câu hỏi làm rõ nếu cần hoặc null",\n'
         '  "suggested_options": ["Lựa chọn 1", "Lựa chọn 2"],\n'
@@ -44,7 +51,7 @@ DEFAULT_PROMPTS: dict[str, str] = {
         '  "missing_slots": ["slot_name"],\n'
         '  "suggested_answer": "Câu trả lời trực tiếp nếu không cần truy vấn DB hoặc null",\n'
         '  "generated_sqls": [\n'
-        '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "sql": "SELECT ... \\nFROM ... \\nWHERE ..."}\n'
+        '     {"id": "sql_1", "title": "Mô tả câu truy vấn", "reasoning": "1-3 câu lý luận riêng cho câu SQL này", "sql": "SELECT ... \\nFROM ... \\nWHERE ..."}\n'
         '  ],\n'
         '  "is_intent_switched": false\n'
         "}"

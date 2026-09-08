@@ -50,6 +50,7 @@ class CitationItem(BaseModel):
     id: str = Field(description="Unique ID matching <cite id='...'> in message, e.g. 'sql_1'")
     type: str = Field(default="sql", description="Type of citation: 'sql', 'knowledge', etc.")
     title: str = Field(default="Truy vấn ClickHouse", description="Title for tooltip")
+    reasoning: str = Field(default="", description="LLM's chain-of-thought for why this specific SQL was generated this way")
     query: str = Field(description="SQL query string")
     raw_result: Any | None = Field(default=None, description="Result preview from ClickHouse")
     execution_time_ms: float | None = Field(default=None, description="Execution time in milliseconds")
@@ -71,6 +72,7 @@ class ChatResponse(BaseModel):
         description="'clarify' if asking for missing info, 'answer' if providing response, 'fallback' if no intent matched."
     )
     message: str = Field(description="The response text sent to user.")
+    intent_reasoning: str = Field(default="", description="LLM's chain-of-thought behind is_clarification_needed/extracted_entities - for debugging prompt & business knowledge")
     collected_slots: dict[str, Any] = Field(default_factory=dict)
     missing_slots: list[str] = Field(default_factory=list)
     suggested_options: list[str] = Field(default_factory=list, description="Dynamic quick reply options suggested by LLM for current question")
@@ -228,7 +230,11 @@ class ChatService:
                 analysis.missing_slots,
                 len(analysis.generated_sqls),
             )
+            if analysis.intent_reasoning:
+                logger.info("    -> Intent Reasoning: %s", analysis.intent_reasoning)
             for sql_item in analysis.generated_sqls:
+                if sql_item.reasoning:
+                    logger.info("    -> SQL [%s] Reasoning: %s", sql_item.id, sql_item.reasoning)
                 logger.info("    -> SQL [%s] (%s): %s", sql_item.id, sql_item.title, sql_item.sql)
         except Exception as e:
             logger.error("  [Step 4: LLM Analysis] LLM analysis failed: %s", e)
@@ -267,6 +273,7 @@ class ChatService:
                 session_status=session_state.status.value,
                 response_type="clarify",
                 message=bot_msg,
+                intent_reasoning=analysis.intent_reasoning,
                 collected_slots=session_state.collected_slots,
                 missing_slots=session_state.missing_slots,
                 suggested_options=analysis.suggested_options,
@@ -300,6 +307,7 @@ class ChatService:
             session_status=session_state.status.value,
             response_type="answer",
             message=bot_msg,
+            intent_reasoning=analysis.intent_reasoning,
             collected_slots=final_slots,
             missing_slots=[],
             suggested_options=[],
@@ -368,6 +376,7 @@ class ChatService:
                     id=item.id,
                     type="sql",
                     title=item.title or "Truy vấn ClickHouse",
+                    reasoning=item.reasoning,
                     query=item.sql,
                     raw_result=raw_res,
                     execution_time_ms=exec_time,

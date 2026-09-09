@@ -68,11 +68,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SESSION_TTL_SECONDS=1800
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=default
-      - CLICKHOUSE_PASSWORD=
-      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST-clickhouse}
+      - CLICKHOUSE_PORT=${CLICKHOUSE_PORT-8123}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD-}
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB-default}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL-deepseek-chat}
       - LLM_BASE_URL=${LLM_BASE_URL-https://api.deepseek.com}
@@ -87,11 +87,16 @@ services:
     depends_on:
       - qdrant
       - redis
-      - clickhouse
 
+  # Bundled local ClickHouse for dev only. On a real deployment CLICKHOUSE_HOST
+  # points at an external cluster (see .env.example), so this container isn't
+  # needed there - it's gated behind the "local" profile: it starts by default
+  # on a dev machine (COMPOSE_PROFILES=local in the local .env) and is skipped
+  # everywhere COMPOSE_PROFILES is left unset (e.g. the VPS's .env).
   clickhouse:
     image: clickhouse/clickhouse-server:24.3-alpine
     container_name: clickhouse_aimkt
+    profiles: ["local"]
     restart: unless-stopped
     ports:
       - "8123:8123"

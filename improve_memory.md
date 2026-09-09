@@ -1,0 +1,21 @@
+Trước tiên đính chính một chi tiết: con số "6 message" bạn nhớ là từ App.jsx (messages.slice(-6)) — nhưng đó là field chat_history mà tôi đã đánh dấu DEPRECATED và ngừng dùng để build prompt từ hôm làm phần "lịch sử chat có cấu trúc". Cơ chế thật đang chạy bây giờ là format_conversation_history() — lấy 3 turn gần nhất (mỗi turn = 1 cặp hỏi-đáp kèm SQL/reasoning) từ Redis, trong khi Redis lưu tối đa 10 turn. Về bản chất vẫn là "cửa sổ trượt theo số lượng gần nhất" — đúng như bạn nhận xét, khá đơn giản.
+
+Vì sao ChatGPT/Gemini/Claude "nhớ" được nhiều lượt hơn — không phải phép màu
+Có 2 cơ chế khác nhau, hay bị gộp làm một:
+
+Trong 1 phiên chat dài (session dài): model hiện đại có context window rất lớn (100K–1M token), nên hàng trăm lượt chat vẫn "nhét vừa" nguyên văn vào prompt — không phải nó "nhớ" theo nghĩa thông minh, mà đơn giản là chưa cần cắt bớt gì cả. Cái giá phải trả: token/chi phí tăng tuyến tính theo độ dài hội thoại, và có hiện tượng "lost in the middle" — thông tin nằm giữa 1 context khổng lồ dễ bị model bỏ sót hơn thông tin ở đầu/cuối.
+Nhớ xuyên nhiều phiên/nhiều ngày (ví dụ ChatGPT nhớ bạn thích gì từ tuần trước): đây không phải full transcript — là 1 tính năng riêng ("Memory"), về bản chất là 1 kho fact nhỏ, có cấu trúc, được 1 bước trích xuất riêng cập nhật liên tục (không lưu nguyên văn hội thoại), rồi chèn vào đầu mỗi prompt mới bất kể hội thoại dài bao nhiêu.
+3 hướng cải thiện phù hợp với hệ thống của bạn (xếp theo độ phức tạp tăng dần)
+1. "Session facts" bền vững — rẻ nhất, hợp use-case nhất, khuyến nghị làm trước
+Hệ thống của bạn vốn đã có extracted_entities theo từng turn (campaign_id, channel, time_range...) — nhưng hiện tại nó chỉ sống trong collected_slots lúc đang WAITING_CLARIFY, và bị reset_to_idle() xoá sạch ngay sau khi trả lời xong. Đề xuất: thêm 1 dict session_facts riêng, không bao giờ bị xoá trong suốt phiên (khác collected_slots), merge dần qua mọi turn (turn sau ghi đè turn trước nếu trùng key). Luôn nhét vào đầu prompt dạng "Bối cảnh đã biết trong phiên: campaign_id=4000, channel mặc định=MyViettel...", không phụ thuộc số turn — kể cả turn thứ 50, model vẫn biết campaign_id mà không cần replay lại 50 turn cũ. Đây chính là kiểu memory có cấu trúc mà ChatGPT dùng cho "Memory" — chỉ khác là scope trong 1 session thay vì xuyên session.
+
+2. Rolling summary khi vượt ngưỡng turn — trung bình
+Khi conversation_history vượt quá N turn (ví dụ >5), thay vì cắt bỏ hẳn turn cũ, gọi 1 lần LLM (rẻ, model nhỏ) tóm tắt các turn cũ thành 1 đoạn ngắn ("người dùng đã hỏi về campaign 4000, 5000; quan tâm chủ yếu kênh MyViettel..."), giữ nguyên văn N turn gần nhất + đoạn tóm tắt này thay cho phần bị cắt. Tốn thêm 1 LLM call phụ mỗi khi ngưỡng bị vượt, nhưng giữ được ngữ cảnh dài mà không phình token vô hạn.
+
+3. Semantic memory qua Qdrant — mạnh nhất, phức tạp nhất
+Bạn đã có sẵn hạ tầng Qdrant cho business_knowledge/sql_examples — hoàn toàn có thể áp dụng y hệt cho conversation: mỗi ConversationTurn được embed và lưu vào 1 collection riêng, lúc có câu hỏi mới thì retrieve theo độ liên quan ngữ nghĩa (không phải theo mới/cũ) — ví dụ user hỏi lại về "campaign 5G" ở turn thứ 40 dù giữa đó có 30 turn không liên quan, hệ thống vẫn kéo đúng turn cũ liên quan ra. Đây là cách giải quyết đúng bài toán "nhớ xuyên rất nhiều lượt", nhưng phức tạp hơn nhiều lần (thêm embedding cost, thêm 1 tầng retrieval, thêm latency) — chỉ đáng làm nếu user thực sự có hội thoại rất dài, nhảy qua lại nhiều chủ đề.
+
+Đề xuất cụ thể
+Với use-case hiện tại (hỏi đáp phân tích ngắn gọn về campaign/metric), tôi nghĩ làm mục 1 (session facts bền vững) là đủ và đáng giá nhất — chi phí gần như 0 (không tốn thêm LLM call, không tốn hạ tầng mới), giải quyết đúng trường hợp thực tế nhất ("đã nói campaign_id rồi, đừng bắt tôi nhắc lại ở turn thứ 10"). Mục 2 (rolling summary) nên làm tiếp nếu bạn thấy hội thoại thường dài hơn 5-6 turn thực sự. Mục 3 để dành khi có nhu cầu thật (người dùng phàn nàn cụ thể là "nó quên mất câu tôi hỏi lúc nãy dù cách không xa").
+
+Bạn muốn mình triển khai mục 1 trước không?

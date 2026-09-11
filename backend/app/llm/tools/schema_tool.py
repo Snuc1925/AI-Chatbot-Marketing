@@ -44,7 +44,7 @@ class SchemaAgentTool:
                         "properties": {
                             "table_name": {
                                 "type": "string",
-                                "description": "Tên bảng cần xem chi tiết (ví dụ: 'sms_log_v2', 'f023_mpre_vas_manh', 'f_adpm_aimkt_campaign_customer_detail')",
+                                "description": "Tên bảng cần xem chi tiết (ví dụ: 'sms_log_v2', 'f023_mpre_vas', 'f_adpm_aimkt_campaign_customer_detail')",
                             }
                         },
                         "required": ["table_name"],

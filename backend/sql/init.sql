@@ -1,6 +1,6 @@
 CREATE DATABASE IF NOT EXISTS default;
 
-CREATE TABLE IF NOT EXISTS default.f023_mpre_vas_manh (
+CREATE TABLE IF NOT EXISTS default.f023_mpre_vas (
     topic_kafka Nullable(String),
     filename Nullable(String),
     prd_id Nullable(UInt32),
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS default.f023_mpre_vas_manh (
 PARTITION BY partition
 ORDER BY (partition, isdn);
 
-CREATE TABLE IF NOT EXISTS default.webservice_log_v2_manh (
+CREATE TABLE IF NOT EXISTS default.webservice_log_v2 (
     isdn String,
     campaign_action_id Nullable(UInt64),
     webservice Nullable(String),
@@ -53,7 +53,7 @@ ORDER BY (partition, isdn, request_time);
 
 CREATE TABLE IF NOT EXISTS default.sms_log_v2 (
     msisdn String,
-    action_id Nullable(UInt64),
+    campaign_action_id Nullable(UInt64),
     sender Nullable(String),
     send_time String,
     status Nullable(String),
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS default.sms_log_v2 (
     transaction_id Nullable(String),
     campaign_id Nullable(UInt64),
     history_id Nullable(String),
-    type Nullable(String),
+    mode Nullable(String),
     partition UInt32
 ) ENGINE = MergeTree()
 PARTITION BY partition
@@ -82,17 +82,35 @@ CREATE TABLE IF NOT EXISTS default.f_adpm_aimkt_campaign_customer_detail (
     promo_label Nullable(String),
     chu_ky_goi Nullable(String),
     price Nullable(Float64),
-    tieu_dung_chinh Nullable(String),
+    tieu_dung_chinh Nullable(Float64),
     ten_usecase Nullable(String),
     partition UInt32
 ) ENGINE = MergeTree()
 PARTITION BY partition
 ORDER BY (partition, msisdn);
 
+CREATE TABLE IF NOT EXISTS default.report_offer_detail_isdn (
+    isdn String,
+    campaign_ai_id Nullable(UInt64),
+    offer_id Nullable(UInt64),
+    action_channel Nullable(String),
+    promotion_package Nullable(String),
+    is_success_action Nullable(UInt8),
+    all_register_number Nullable(UInt64),
+    campaign_register_number Nullable(UInt64),
+    campaign_register_channel Nullable(String),
+    is_month_package Nullable(UInt8),
+    is_remove_package Nullable(UInt8),
+    package_fee_sum Nullable(Float64),
+    partition UInt32
+) ENGINE = MergeTree()
+PARTITION BY partition
+ORDER BY (partition, isdn);
+
 INSERT INTO default.f_adpm_aimkt_campaign_customer_detail (msisdn, program_code, vas_name, channel, event_time, cdr_name, group_flag, cust_age, province_code_home, trangthai_truyenthong, ten_usecase, partition) VALUES ('84981234567', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'lao dong tre', 'HNI', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84987654321', 'mxh_high&wifi_partial&p2', '5G50', 'SMS', '10h', 'PTDL', 'TG', 'sinh vien', 'HCM', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84912345678', 'mxh_low@wifi_partial&p2', '5G70', 'MYVIETTEL', '16h', 'PTDL', 'TG', 'trung nien', 'CTO', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84976543210', 'mxh_low@wifi_partial&p2', '5GMAX', 'CALLBOT', '21h', 'PTDL', 'TG', 'cao tuoi', 'SLA', 'tttc', 'không gói vào gói 5 tỉnh', 20260810), ('84988888888', 'mxh_high&not_wifi&p2', 'MT7Z', 'SMS', '10h', 'PTDL', 'CONTROL', 'hoc sinh', 'QNI', 'ko_tttc', 'không gói vào gói 5 tỉnh', 20260810);
 
-INSERT INTO default.sms_log_v2 (msisdn, action_id, sender, send_time, status, gateway, campaign_id, history_id, partition) VALUES ('84981234567', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84987654321', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84988888888', 41009, 'VIETTEL_KM', '20260810100500', '-1007M', -1000, 99080, NULL, 20260810);
+INSERT INTO default.sms_log_v2 (msisdn, campaign_action_id, sender, send_time, status, gateway, campaign_id, history_id, partition) VALUES ('84981234567', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84987654321', 41009, 'VIETTEL_KM', '20260810100500', '0', 1000, 99080, '186', 20260810), ('84988888888', 41009, 'VIETTEL_KM', '20260810100500', '-1007M', -1000, 99080, NULL, 20260810);
 
-INSERT INTO default.webservice_log_v2_manh (isdn, campaign_action_id, webservice, request_time, status, campaign_id, mode, partition) VALUES ('84912345678', 44897, '1549', '20260810160200', '1', 101471, 'ONLINE', 20260810), ('84976543210', 44898, '1530', '20260810210500', '200', 101472, 'ONLINE', 20260810);
+INSERT INTO default.webservice_log_v2 (isdn, campaign_action_id, webservice, request_time, status, campaign_id, mode, partition) VALUES ('84912345678', 44897, '1549', '20260810160200', '1', 101471, 'ONLINE', 20260810), ('84976543210', 44898, '1530', '20260810210500', '200', 101472, 'ONLINE', 20260810);
 
-INSERT INTO default.f023_mpre_vas_manh (isdn, vas_type, vas_service, sub_service, action_no, sta_datetime, tot_charge, description, partition) VALUES ('84981234567', 'VIETTEL', '5G50', '5G50', 'DK', '2026-08-10 10:35:00', 50000.0, 'Đăng ký gói 5G50', 20260810), ('84912345678', 'VIETTEL', '5G70', '5G70', 'DK', '2026-08-10 16:45:00', 70000.0, 'Đăng ký gói 5G70', 20260810);
+INSERT INTO default.f023_mpre_vas (isdn, vas_type, vas_service, sub_service, action_no, sta_datetime, tot_charge, description, partition) VALUES ('84981234567', 'VIETTEL', '5G50', '5G50', 'DK', '2026-08-10 10:35:00', 50000.0, 'Đăng ký gói 5G50', 20260810), ('84912345678', 'VIETTEL', '5G70', '5G70', 'DK', '2026-08-10 16:45:00', 70000.0, 'Đăng ký gói 5G70', 20260810);

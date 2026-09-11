@@ -28,7 +28,7 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "Nội dung: chọn bảng/cột nào, vì sao JOIN như vậy, áp dụng quy tắc Business Knowledge hoặc SQL Mẫu nào. Đây là bước lý luận để bạn DỰA VÀO ĐÓ mà viết ra `sql` của chính câu đó, không phải giải thích ngược sau khi SQL đã viết xong.\n"
         "1. Xác định ý định người dùng và trích xuất các thực thể (slots):\n"
         "   - `campaign_id`: mã định danh chiến dịch, LUÔN LUÔN LÀ SỐ (kiểu UInt64), chỉ tồn tại ở các bảng LOG GỬI TIN "
-        "`webservice_log_v2_manh` và `sms_log_v2`. Hệ thống HIỆN KHÔNG có bảng tra cứu tên/nhãn chiến dịch sang mã số. "
+        "`webservice_log_v2` và `sms_log_v2`. Hệ thống HIỆN KHÔNG có bảng tra cứu tên/nhãn chiến dịch sang mã số. "
         "Vì vậy nếu người dùng chỉ nói TÊN hoặc NHÃN chiến dịch (ví dụ 'chiến dịch 5G', 'chiến dịch DATA') mà KHÔNG cho con số cụ thể, "
         "đó KHÔNG ĐỦ để điền `campaign_id` - phải coi là còn thiếu thông tin và hỏi lại người dùng đúng con số campaign_id, "
         "TUYỆT ĐỐI KHÔNG được tự suy đoán/gán nhãn chữ (như '5G') vào `campaign_id`.\n"

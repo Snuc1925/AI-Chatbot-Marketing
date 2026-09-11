@@ -1,4 +1,4 @@
-* f023_mpre_vas_manh: Đây là bảng log mua gói
+* f023_mpre_vas: Đây là bảng log mua gói
 - topic_kafka: ADD_MONEY, 2G3G, VTFREE, DATAPLUS, GOOGLE_DCB_REFUND, BI_CDR_SPLUS, ITALK, CHARGINGGW, AUTODETECTZONE
 - filename: vtfree.0001.txt
 - prd_id: 20260731, 20260801, null
@@ -29,7 +29,7 @@
 - partition: 20260801
 
 
-* webservice_log_v2_manh: Bảng 
+* webservice_log_v2: Bảng 
 - isdn: (string) 84917568540
 - campaign_action_id: 44897, ...
 - webservice: 1549, 1530, ... 

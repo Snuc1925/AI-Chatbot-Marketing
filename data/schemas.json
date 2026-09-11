@@ -1,9 +1,39 @@
 [
   {
-    "table_name": "f023_mpre_vas_manh",
+    "table_name": "f023_mpre_vas",
     "table_alias": null,
     "description": "Bảng log mua và đăng ký gói cước VAS của thuê bao.",
     "columns": [
+      {
+        "name": "topic_kafka",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "filename",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "prd_id",
+        "type": "Nullable(UInt32)",
+        "description": ""
+      },
+      {
+        "name": "hour_id",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "import_date",
+        "type": "Nullable(Date)",
+        "description": ""
+      },
+      {
+        "name": "headnum_no",
+        "type": "Nullable(String)",
+        "description": ""
+      },
       {
         "name": "isdn",
         "type": "String",
@@ -30,9 +60,29 @@
         "description": "Hành động: DK (Đăng ký), KT (Kiểm tra), HUY (Hủy gói)"
       },
       {
+        "name": "action_no2",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "vas_status",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
         "name": "command",
         "type": "Nullable(String)",
         "description": "Cú pháp tin nhắn đăng ký (KTS5, FT5, VT100,...)"
+      },
+      {
+        "name": "command2",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "charge_type",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "sta_datetime",
@@ -55,9 +105,39 @@
         "description": "Tổng cước phí thực tế ghi nhận doanh thu"
       },
       {
+        "name": "party_code",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
         "name": "description",
         "type": "Nullable(String)",
         "description": "Mô tả giao dịch (S5, VT100, Trừ phí gia hạn gói 5G10,...)"
+      },
+      {
+        "name": "source_name",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "direction_id",
+        "type": "Nullable(Float64)",
+        "description": ""
+      },
+      {
+        "name": "insert_date",
+        "type": "Nullable(DateTime)",
+        "description": ""
+      },
+      {
+        "name": "mm_charge",
+        "type": "Nullable(Float64)",
+        "description": ""
+      },
+      {
+        "name": "mon",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "partition",
@@ -67,7 +147,7 @@
     ]
   },
   {
-    "table_name": "webservice_log_v2_manh",
+    "table_name": "webservice_log_v2",
     "table_alias": null,
     "description": "Bảng ghi log truyền thông các kênh webservice (MyViettel, Callbot).",
     "columns": [
@@ -87,6 +167,11 @@
         "description": "Tên webservice API gọi đến"
       },
       {
+        "name": "url",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
         "name": "request_time",
         "type": "String",
         "description": "Thời gian gửi tin truyền thông (định dạng YYYYMMDDHHMMSS)"
@@ -98,8 +183,13 @@
       },
       {
         "name": "response_time",
-        "type": "String",
+        "type": "Nullable(String)",
         "description": "Thời gian phản hồi của kênh webservice"
+      },
+      {
+        "name": "response",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "status",
@@ -110,6 +200,16 @@
         "name": "campaign_id",
         "type": "Nullable(UInt64)",
         "description": "Mã ID chiến dịch Marketing"
+      },
+      {
+        "name": "filed1",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "mode",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "partition",
@@ -129,7 +229,7 @@
         "description": "Số điện thoại thuê bao nhận SMS (tương đương isdn)"
       },
       {
-        "name": "action_id",
+        "name": "campaign_action_id",
         "type": "Nullable(UInt64)",
         "description": "Mã hành động gửi tin"
       },
@@ -149,9 +249,34 @@
         "description": "Trạng thái gửi: status = '0' là gửi tin nhắn SMS thành công"
       },
       {
+        "name": "gateway",
+        "type": "Nullable(Int64)",
+        "description": ""
+      },
+      {
+        "name": "duration",
+        "type": "Nullable(Int64)",
+        "description": ""
+      },
+      {
+        "name": "transaction_id",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
         "name": "campaign_id",
         "type": "Nullable(UInt64)",
         "description": "Mã ID chiến dịch Marketing"
+      },
+      {
+        "name": "history_id",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "mode",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "partition",
@@ -176,11 +301,6 @@
         "description": "Mã chương trình khuyến nghị (KHÔNG PHẢI mã định danh chiến dịch - không liên quan đến campaign_id)."
       },
       {
-        "name": "ten_usecase",
-        "type": "Nullable(String)",
-        "description": "Tên usecase của chương trình khuyến nghị (KHÔNG PHẢI tên/mã chiến dịch - không liên quan đến campaign_id)."
-      },
-      {
         "name": "vas_name",
         "type": "Nullable(String)",
         "description": "Tên gói cước khuyến nghị (5G50, MT7Z, 5GMAX, 5G70, SD30S,...)"
@@ -194,6 +314,11 @@
         "name": "event_time",
         "type": "Nullable(String)",
         "description": "Khung giờ truyền thông (10h, 16h, 21h,...)"
+      },
+      {
+        "name": "cdr_name",
+        "type": "Nullable(String)",
+        "description": ""
       },
       {
         "name": "group_flag",
@@ -216,14 +341,106 @@
         "description": "Trạng thái: tttc (truyền thông thành công), ko_tttc"
       },
       {
+        "name": "promo_label",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
+        "name": "chu_ky_goi",
+        "type": "Nullable(String)",
+        "description": ""
+      },
+      {
         "name": "price",
         "type": "Nullable(Float64)",
         "description": "Giá gói cước khuyến nghị"
       },
       {
+        "name": "tieu_dung_chinh",
+        "type": "Nullable(Float64)",
+        "description": ""
+      },
+      {
+        "name": "ten_usecase",
+        "type": "Nullable(String)",
+        "description": "Tên usecase của chương trình khuyến nghị (KHÔNG PHẢI tên/mã chiến dịch - không liên quan đến campaign_id)."
+      },
+      {
         "name": "partition",
         "type": "UInt32",
         "description": "Partition ngày dạng YYYYMMDD"
+      }
+    ]
+  },
+  {
+    "table_name": "report_offer_detail_isdn",
+    "table_alias": null,
+    "description": "",
+    "columns": [
+      {
+        "name": "isdn",
+        "type": "String",
+        "description": "Số thuê bao"
+      },
+      {
+        "name": "campaign_ai_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã campaign ai"
+      },
+      {
+        "name": "offer_id",
+        "type": "Nullable(UInt64)",
+        "description": "Mã offer"
+      },
+      {
+        "name": "action_channel",
+        "type": "Nullable(String)",
+        "description": "Kênh tác động truyền thông"
+      },
+      {
+        "name": "promotion_package",
+        "type": "Nullable(String)",
+        "description": "Gói KM truyền thông"
+      },
+      {
+        "name": "is_success_action",
+        "type": "Nullable(UInt8)",
+        "description": "Tác động thành công hay thất bại (1: Thành công, 0: thất bại)"
+      },
+      {
+        "name": "all_register_number",
+        "type": "Nullable(UInt64)",
+        "description": "Số lượng đăng ký gói (bất kỳ)"
+      },
+      {
+        "name": "campaign_register_number",
+        "type": "Nullable(UInt64)",
+        "description": "Số lượng đăng ký gói theo campaign truyền thông"
+      },
+      {
+        "name": "campaign_register_channel",
+        "type": "Nullable(String)",
+        "description": "Kênh đăng ký gói theo campaign truyền thông (VD: USSD, SMS, MyViettel)"
+      },
+      {
+        "name": "is_month_package",
+        "type": "Nullable(UInt8)",
+        "description": "Chuyển gói tháng hay không (1: có; 0: không)"
+      },
+      {
+        "name": "is_remove_package",
+        "type": "Nullable(UInt8)",
+        "description": "Chuyển gói ngày hay không (1: có; 0: không)"
+      },
+      {
+        "name": "package_fee_sum",
+        "type": "Nullable(Float64)",
+        "description": "Tổng phí đăng ký gói"
+      },
+      {
+        "name": "partition",
+        "type": "UInt32",
+        "description": "Ngày tổng hợp"
       }
     ]
   }

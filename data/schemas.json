@@ -395,7 +395,7 @@
       {
         "name": "action_channel",
         "type": "Nullable(String)",
-        "description": "Kênh tác động truyền thông"
+        "description": "Kênh tác động truyền thông. Đây là loại campaign. Mỗi campaign CHỈ tương ứng với 1 kênh tác động/loại duy nhất"
       },
       {
         "name": "promotion_package",

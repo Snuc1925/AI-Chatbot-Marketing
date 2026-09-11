@@ -1,30 +1,3 @@
 [
-  {
-    "question": "Tính tỉ lệ nhắn tin thành công qua kênh MyViettel trong tháng này",
-    "sql": "SELECT \n    COUNT() AS total_requests,\n    COUNTIf(status = '1') AS success_requests,\n    round(COUNTIf(status = '1') / COUNT() * 100, 2) AS success_rate\nFROM default.webservice_log_v2\nWHERE toYYYYMM(toDate(toString(partition))) = toYYYYMM(now())"
-  },
-  {
-    "question": "Tỉ lệ gửi tin nhắn thành công qua từng kênh truyền thông trong tháng này",
-    "sql": "SELECT \n    channel,\n    COUNT() AS total_sends,\n    COUNTIf(trangthai_truyenthong = 'tttc') AS successful_sends,\n    round(COUNTIf(trangthai_truyenthong = 'tttc') / COUNT() * 100, 2) AS success_rate\nFROM f_adpm_aimkt_campaign_customer_detail\nWHERE toYYYYMM(toDate(toString(partition))) = toYYYYMM(now())\nGROUP BY channel\nORDER BY total_sends DESC"
-  },
-  {
-    "question": "Số lượng thuê bao phản hồi và mua gói cước theo từng chiến dịch trong tháng 8/2026",
-    "sql": "SELECT \n    c.program_code,\n    c.campaign_name,\n    COUNT(DISTINCT c.msisdn) AS total_targeted_customers,\n    COUNT(DISTINCT v.isdn) AS total_converted_customers,\n    round(COUNT(DISTINCT v.isdn) / COUNT(DISTINCT c.msisdn) * 100, 2) AS conversion_rate\nFROM f_adpm_aimkt_campaign_customer_detail c\nLEFT JOIN f023_mpre_vas v \n    ON c.msisdn = v.isdn \n    AND c.vas_name = v.sub_service\n    AND v.partition BETWEEN 20260801 AND 20260831\nWHERE c.partition BETWEEN 20260801 AND 20260831\nGROUP BY c.program_code, c.campaign_name\nORDER BY total_converted_customers DESC"
-  },
-  {
-    "question": "Tổng doanh thu và số lượng gói cước bán được qua chiến dịch theo từng kênh trong tháng này",
-    "sql": "SELECT \n    c.channel,\n    COUNT(DISTINCT v.isdn) AS total_buyers,\n    COUNT() AS total_packages_sold,\n    SUM(v.tot_charge) AS total_revenue\nFROM f_adpm_aimkt_campaign_customer_detail c\nINNER JOIN f023_mpre_vas v \n    ON c.msisdn = v.isdn \n    AND c.vas_name = v.sub_service\n    AND toYYYYMM(toDate(toString(v.partition))) = toYYYYMM(now())\nWHERE toYYYYMM(toDate(toString(c.partition))) = toYYYYMM(now())\nGROUP BY c.channel\nORDER BY total_revenue DESC"
-  },
-  {
-    "question": "Top 10 gói cước có doanh thu cao nhất từ các chiến dịch Marketing trong 30 ngày gần nhất",
-    "sql": "SELECT \n    v.sub_service AS package_name,\n    COUNT(DISTINCT v.isdn) AS buyers_count,\n    SUM(v.tot_charge) AS total_revenue\nFROM f_adpm_aimkt_campaign_customer_detail c\nINNER JOIN f023_mpre_vas v \n    ON c.msisdn = v.isdn \n    AND c.vas_name = v.sub_service\n    AND toDate(toString(v.partition)) >= today() - 30\nWHERE toDate(toString(c.partition)) >= today() - 30\nGROUP BY package_name\nORDER BY total_revenue DESC\nLIMIT 10"
-  },
-  {
-    "question": "Phân bổ khách hàng tương tác theo nhóm độ tuổi và giới tính trong chiến dịch gần đây",
-    "sql": "SELECT \n    age_group,\n    gender,\n    COUNT() AS customer_count,\n    COUNTIf(trangthai_truyenthong = 'tttc') AS success_count\nFROM f_adpm_aimkt_campaign_customer_detail\nWHERE toDate(toString(partition)) >= today() - 30\nGROUP BY age_group, gender\nORDER BY customer_count DESC"
-  },
-  {
-    "question": "Tính tỉ lệ khách hàng phản hồi qua kênh MyViettel trong tháng này",
-    "sql": "SELECT \n    COUNT() AS total_requests,\n    COUNTIf(status = '1') AS success_requests,\n    round(COUNTIf(status = '1') / COUNT() * 100, 2) AS success_rate\nFROM default.webservice_log_v2\nWHERE toYYYYMM(toDate(toString(partition))) = toYYYYMM(now())"
-  }
+
 ]
